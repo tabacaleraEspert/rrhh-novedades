@@ -1,0 +1,35 @@
+@page "/login"
+@layout EmptyLayout
+@inject NavigationManager Nav
+
+<PageTitle>Iniciar sesión - Novedades RRHH</PageTitle>
+
+<div class="login-wrapper">
+    <div class="login-card">
+        <div class="logo">
+            <img src="/img/isologotipo-negativo.svg" alt="ESPERT" />
+        </div>
+        <h1>Novedades RRHH</h1>
+        @if (_error)
+        {
+            <p class="login-error">Credenciales inválidas</p>
+        }
+        <form method="post" action="/api/auth/login">
+            <label for="email">Email</label>
+            <input type="email" id="email" name="email" required autofocus placeholder="usuario@tabacaleraespert.com" />
+            <label for="password">Contraseña</label>
+            <input type="password" id="password" name="password" required placeholder="••••••••" />
+            <button type="submit">Ingresar</button>
+        </form>
+    </div>
+</div>
+
+@code {
+    private bool _error;
+
+    protected override void OnInitialized()
+    {
+        var uri = Nav.ToAbsoluteUri(Nav.Uri);
+        _error = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(uri.Query).ContainsKey("error");
+    }
+}

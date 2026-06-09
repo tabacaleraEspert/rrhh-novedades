@@ -1,0 +1,138 @@
+@page "/mensajes"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject IIngestaService Ingesta
+@inject IParteService Parte
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject IOptions<AsistenciaOptions> AsistenciaOpt
+@inject ISnackbar Snackbar
+@using Microsoft.Extensions.Options
+@using RRHHNovedades.Web.Data
+@using RRHHNovedades.Web.Models
+@using RRHHNovedades.Web.Options
+@using RRHHNovedades.Web.Services
+
+<PageTitle>Bot de novedades - RRHH</PageTitle>
+
+<MudText Typo="Typo.h5" Class="mb-1" Style="font-weight:600;">Bot de novedades</MudText>
+<MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
+    Partes automáticos: @_opt.HoraParteManana (mañana) y @_opt.HoraParteTarde (tarde) · @_opt.TimeZone
+</MudText>
+
+<MudGrid>
+    <MudItem xs="12" md="6">
+        <MudPaper Class="pa-4" Elevation="1">
+            <MudText Typo="Typo.subtitle1" Class="mb-2" Style="font-weight:600;">Acciones manuales</MudText>
+            <div class="d-flex flex-wrap gap-2 mb-3">
+                <MudButton Variant="Variant.Filled" Color="Color.Secondary" StartIcon="@Icons.Material.Filled.Sync"
+                           OnClick="Sincronizar" Disabled="_busy">Sincronizar hoy</MudButton>
+            </div>
+            <MudDivider Class="my-2" />
+            @foreach (var t in new[] { Turno.Manana, Turno.Tarde })
+            {
+                <div class="d-flex align-center gap-2 my-1">
+                    <MudText Style="min-width:90px;font-weight:500;">@(t == Turno.Manana ? "Mañana" : "Tarde")</MudText>
+                    <MudButton Size="Size.Small" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Visibility"
+                               OnClick="@(() => Previsualizar(t))" Disabled="_busy">Previsualizar</MudButton>
+                    <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Send"
+                               OnClick="@(() => Enviar(t))" Disabled="_busy">Enviar parte</MudButton>
+                </div>
+            }
+        </MudPaper>
+    </MudItem>
+
+    <MudItem xs="12" md="6">
+        <MudPaper Class="pa-4" Elevation="1" Style="min-height:160px;">
+            <MudText Typo="Typo.subtitle1" Class="mb-2" Style="font-weight:600;">Vista previa</MudText>
+            @if (_preview is null)
+            {
+                <MudText Typo="Typo.body2" Color="Color.Secondary">Previsualizá un parte para ver cómo se envía.</MudText>
+            }
+            else
+            {
+                <pre style="white-space:pre-wrap;font-family:inherit;margin:0;">@_preview</pre>
+            }
+        </MudPaper>
+    </MudItem>
+</MudGrid>
+
+<MudPaper Class="pa-4 mt-4" Elevation="1">
+    <MudText Typo="Typo.subtitle1" Class="mb-2" Style="font-weight:600;">Últimos envíos</MudText>
+    <MudTable Items="_envios" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm">
+        <NoRecordsContent><MudText>Sin envíos registrados.</MudText></NoRecordsContent>
+        <HeaderContent>
+            <MudTh>Fecha</MudTh><MudTh>Turno</MudTh><MudTh>Teléfono</MudTh><MudTh>Resultado</MudTh><MudTh>SID</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Fecha">@context.Fecha.ToString("dd/MM/yyyy") @context.EnviadoUtc.ToLocalTime().ToString("HH:mm")</MudTd>
+            <MudTd DataLabel="Turno">@(context.Turno == Turno.Manana ? "Mañana" : "Tarde")</MudTd>
+            <MudTd DataLabel="Teléfono">@context.Telefono</MudTd>
+            <MudTd DataLabel="Resultado">
+                <MudChip T="string" Size="Size.Small" Color="@(context.Exito ? Color.Success : Color.Error)">
+                    @(context.Exito ? "OK" : "Error")
+                </MudChip>
+            </MudTd>
+            <MudTd DataLabel="SID">@(context.MessageSid ?? context.Error ?? "—")</MudTd>
+        </RowTemplate>
+    </MudTable>
+</MudPaper>
+
+@code {
+    private AsistenciaOptions _opt = new();
+    private bool _busy;
+    private string? _preview;
+    private List<EnvioParte> _envios = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        _opt = AsistenciaOpt.Value;
+        await CargarEnvios();
+    }
+
+    private async Task CargarEnvios()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _envios = await db.EnviosParte.OrderByDescending(e => e.EnviadoUtc).Take(20).ToListAsync();
+    }
+
+    private async Task Sincronizar()
+    {
+        _busy = true;
+        try
+        {
+            var hoy = DateOnly.FromDateTime(DateTime.Today);
+            await Ingesta.SincronizarEmpleadosAsync();
+            var n = await Ingesta.SincronizarDiaAsync(hoy);
+            Snackbar.Add($"Sincronización OK: {n} novedades de hoy.", Severity.Success);
+        }
+        catch (Exception ex) { Snackbar.Add($"Error: {ex.Message}", Severity.Error); }
+        finally { _busy = false; }
+    }
+
+    private async Task Previsualizar(Turno t)
+    {
+        _busy = true;
+        try
+        {
+            var c = await Parte.ArmarParteAsync(DateOnly.FromDateTime(DateTime.Today), t);
+            _preview = c.Completo;
+        }
+        catch (Exception ex) { Snackbar.Add($"Error: {ex.Message}", Severity.Error); }
+        finally { _busy = false; }
+    }
+
+    private async Task Enviar(Turno t)
+    {
+        _busy = true;
+        try
+        {
+            var r = await Parte.EnviarParteAsync(DateOnly.FromDateTime(DateTime.Today), t);
+            _preview = r.Contenido.Completo;
+            Snackbar.Add($"Parte {(t == Turno.Manana ? "mañana" : "tarde")}: {r.Enviados} enviados, {r.Fallidos} fallidos.",
+                r.Fallidos == 0 ? Severity.Success : Severity.Warning);
+            await CargarEnvios();
+        }
+        catch (Exception ex) { Snackbar.Add($"Error: {ex.Message}", Severity.Error); }
+        finally { _busy = false; }
+    }
+}

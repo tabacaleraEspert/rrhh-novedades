@@ -1,0 +1,56 @@
+@page "/empleados"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject IDbContextFactory<AppDbContext> DbFactory
+@using RRHHNovedades.Web.Data
+@using RRHHNovedades.Web.Models
+
+<PageTitle>Empleados - RRHH</PageTitle>
+
+<MudText Typo="Typo.h5" Class="mb-1" Style="font-weight:600;">Empleados</MudText>
+<MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">@_empleados.Count empleados sincronizados desde Humand</MudText>
+
+<MudPaper Elevation="1">
+    <MudTable Items="_empleados" Dense="true" Hover="true" Loading="_loading" Filter="Filtra" Breakpoint="Breakpoint.Sm">
+        <NoRecordsContent><MudText>Sin empleados. Ejecutá la sincronización desde el Bot de novedades.</MudText></NoRecordsContent>
+        <ToolBarContent>
+            <MudTextField @bind-Value="_buscar" Placeholder="Buscar" Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Small" Class="mt-0" Immediate="true" />
+        </ToolBarContent>
+        <HeaderContent>
+            <MudTh>Apellido y nombre</MudTh>
+            <MudTh>Área</MudTh>
+            <MudTh>Turno</MudTh>
+            <MudTh>Teléfono</MudTh>
+            <MudTh>ID Humand</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Apellido y nombre">@context.ApellidoNombre</MudTd>
+            <MudTd DataLabel="Área">@(context.Area ?? "—")</MudTd>
+            <MudTd DataLabel="Turno">@(context.Turno == Turno.Manana ? "Mañana" : "Tarde")</MudTd>
+            <MudTd DataLabel="Teléfono">@(context.Telefono ?? "—")</MudTd>
+            <MudTd DataLabel="ID Humand">@context.EmployeeInternalId</MudTd>
+        </RowTemplate>
+    </MudTable>
+</MudPaper>
+
+@code {
+    private List<Empleado> _empleados = [];
+    private bool _loading = true;
+    private string _buscar = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _empleados = await db.Empleados.OrderBy(e => e.Apellido).ThenBy(e => e.Nombre).ToListAsync();
+        _loading = false;
+    }
+
+    private bool Filtra(Empleado e)
+    {
+        if (string.IsNullOrWhiteSpace(_buscar)) return true;
+        var q = _buscar.Trim().ToLowerInvariant();
+        return e.NombreCompleto.ToLowerInvariant().Contains(q)
+            || (e.Area ?? "").ToLowerInvariant().Contains(q);
+    }
+}

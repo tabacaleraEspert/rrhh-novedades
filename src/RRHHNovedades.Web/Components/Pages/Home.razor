@@ -1,0 +1,122 @@
+@page "/"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject IDbContextFactory<AppDbContext> DbFactory
+@using RRHHNovedades.Web.Data
+@using RRHHNovedades.Web.Models
+
+<PageTitle>Dashboard - Novedades RRHH</PageTitle>
+
+<div class="d-flex align-center justify-space-between mb-1 flex-wrap">
+    <div>
+        <MudText Typo="Typo.h5" Style="font-weight:600;">Dashboard</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary">Novedades del @_fecha.ToString("dd/MM/yyyy")</MudText>
+    </div>
+    <div class="d-flex align-center gap-2">
+        <MudDatePicker Label="Fecha" Date="_fechaSel" DateChanged="OnFechaPicked" Style="max-width:170px;"
+                       DateFormat="dd/MM/yyyy" Editable="true" />
+        <MudButtonGroup Variant="Variant.Outlined" Size="Size.Small">
+            <MudButton Color="@(_turno is null ? Color.Primary : Color.Default)" OnClick="@(() => SetTurno(null))">Global</MudButton>
+            <MudButton Color="@(_turno == Turno.Manana ? Color.Primary : Color.Default)" OnClick="@(() => SetTurno(Turno.Manana))">Mañana</MudButton>
+            <MudButton Color="@(_turno == Turno.Tarde ? Color.Primary : Color.Default)" OnClick="@(() => SetTurno(Turno.Tarde))">Tarde</MudButton>
+        </MudButtonGroup>
+    </div>
+</div>
+
+<MudGrid Class="mt-1">
+    @KpiCard("Presentes", _kpi.Presentes, Color.Success, Icons.Material.Filled.CheckCircle)
+    @KpiCard("Tardanzas", _kpi.Tardanzas, Color.Warning, Icons.Material.Filled.Schedule)
+    @KpiCard("Ausentes", _kpi.Ausentes, Color.Error, Icons.Material.Filled.Cancel)
+    @KpiCard("Justificados", _kpi.Justificados, Color.Info, Icons.Material.Filled.FactCheck)
+</MudGrid>
+
+<MudPaper Class="mt-4" Elevation="1">
+    <MudTable Items="_filtradas" Dense="true" Hover="true" Loading="_loading" Breakpoint="Breakpoint.Sm">
+        <NoRecordsContent><MudText>Sin novedades para esta fecha. Ejecutá la sincronización desde el Bot de novedades.</MudText></NoRecordsContent>
+        <HeaderContent>
+            <MudTh>Empleado</MudTh>
+            <MudTh>Área</MudTh>
+            <MudTh>Turno</MudTh>
+            <MudTh>Estado</MudTh>
+            <MudTh>Entrada</MudTh>
+            <MudTh>Salida</MudTh>
+            <MudTh>Motivo</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Empleado">@context.Empleado.ApellidoNombre</MudTd>
+            <MudTd DataLabel="Área">@(context.Empleado.Area ?? "—")</MudTd>
+            <MudTd DataLabel="Turno">@(context.Turno == Turno.Manana ? "Mañana" : "Tarde")</MudTd>
+            <MudTd DataLabel="Estado"><MudChip T="string" Size="Size.Small" Color="EstadoColor(context.Estado)">@EstadoTexto(context.Estado)</MudChip></MudTd>
+            <MudTd DataLabel="Entrada">@(context.HoraEntrada?.ToString("HH:mm") ?? "—")</MudTd>
+            <MudTd DataLabel="Salida">@(context.HoraSalida?.ToString("HH:mm") ?? "—")</MudTd>
+            <MudTd DataLabel="Motivo">@(context.MotivoNovedad ?? "—")</MudTd>
+        </RowTemplate>
+    </MudTable>
+</MudPaper>
+
+@code {
+    private DateTime? _fechaSel = DateTime.Today;
+    private DateOnly _fecha => DateOnly.FromDateTime(_fechaSel ?? DateTime.Today);
+    private Turno? _turno;
+    private bool _loading = true;
+    private List<NovedadDiaria> _novedades = [];
+    private IEnumerable<NovedadDiaria> _filtradas =>
+        _turno is null ? _novedades : _novedades.Where(n => n.Turno == _turno);
+
+    private (int Presentes, int Tardanzas, int Ausentes, int Justificados) _kpi;
+
+    protected override async Task OnInitializedAsync() => await Cargar();
+
+    private void SetTurno(Turno? t) { _turno = t; RecalcularKpi(); }
+
+    private async Task OnFechaPicked(DateTime? d) { _fechaSel = d; await Cargar(); }
+
+    private async Task Cargar()
+    {
+        _loading = true;
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _novedades = await db.Novedades.Include(n => n.Empleado)
+            .Where(n => n.Fecha == _fecha)
+            .OrderBy(n => n.Empleado.Apellido).ToListAsync();
+        RecalcularKpi();
+        _loading = false;
+    }
+
+    private void RecalcularKpi()
+    {
+        var src = _filtradas;
+        _kpi = (
+            src.Count(n => n.Estado == EstadoJornada.Presente),
+            src.Count(n => n.Estado == EstadoJornada.Tarde),
+            src.Count(n => n.Estado == EstadoJornada.AusenteInjustificado),
+            src.Count(n => n.Estado == EstadoJornada.AusenteJustificado));
+    }
+
+    private RenderFragment KpiCard(string titulo, int valor, Color color, string icon) =>@<MudItem xs="6" md="3">
+        <MudPaper Class="pa-4" Elevation="1">
+            <div class="d-flex align-center justify-space-between">
+                <MudText Typo="Typo.overline" Color="Color.Secondary">@titulo</MudText>
+                <MudIcon Icon="@icon" Color="@color" Size="Size.Small" />
+            </div>
+            <MudText Typo="Typo.h4" Style="font-weight:600;">@valor</MudText>
+        </MudPaper>
+    </MudItem>;
+
+    private static Color EstadoColor(EstadoJornada e) => e switch
+    {
+        EstadoJornada.Presente => Color.Success,
+        EstadoJornada.Tarde => Color.Warning,
+        EstadoJornada.AusenteInjustificado => Color.Error,
+        EstadoJornada.AusenteJustificado => Color.Info,
+        _ => Color.Default
+    };
+
+    private static string EstadoTexto(EstadoJornada e) => e switch
+    {
+        EstadoJornada.Presente => "Presente",
+        EstadoJornada.Tarde => "Tarde",
+        EstadoJornada.AusenteInjustificado => "Ausente",
+        EstadoJornada.AusenteJustificado => "Justificado",
+        _ => "Franco"
+    };
+}

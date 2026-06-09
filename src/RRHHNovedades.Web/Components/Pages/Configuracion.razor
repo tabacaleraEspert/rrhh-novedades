@@ -1,0 +1,127 @@
+@page "/configuracion"
+@attribute [Authorize(Roles = "Admin")]
+@rendermode InteractiveServer
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject IOptions<AsistenciaOptions> AsistenciaOpt
+@inject ISnackbar Snackbar
+@using Microsoft.Extensions.Options
+@using RRHHNovedades.Web.Data
+@using RRHHNovedades.Web.Models
+@using RRHHNovedades.Web.Options
+
+<PageTitle>Configuración - RRHH</PageTitle>
+
+<MudText Typo="Typo.h5" Class="mb-4" Style="font-weight:600;">Configuración</MudText>
+
+<MudGrid>
+    <MudItem xs="12" md="7">
+        <MudPaper Class="pa-4" Elevation="1">
+            <MudText Typo="Typo.subtitle1" Class="mb-2" Style="font-weight:600;">Destinatarios del parte</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">
+                Listado de teléfonos a los que el bot envía los 2 partes diarios. Formato E.164 (ej. +5491122334455).
+            </MudText>
+
+            <div class="d-flex gap-2 mb-3 flex-wrap align-center">
+                <MudTextField @bind-Value="_nuevoNombre" Label="Nombre" Style="max-width:200px;" Margin="Margin.Dense" />
+                <MudTextField @bind-Value="_nuevoTel" Label="Teléfono (+54...)" Style="max-width:200px;" Margin="Margin.Dense" />
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+                           OnClick="Agregar">Agregar</MudButton>
+            </div>
+
+            <MudTable Items="_destinatarios" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm">
+                <NoRecordsContent><MudText>Sin destinatarios.</MudText></NoRecordsContent>
+                <HeaderContent>
+                    <MudTh>Nombre</MudTh><MudTh>Teléfono</MudTh><MudTh>Activo</MudTh><MudTh></MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd DataLabel="Nombre">@context.Nombre</MudTd>
+                    <MudTd DataLabel="Teléfono">@context.Telefono</MudTd>
+                    <MudTd DataLabel="Activo">
+                        <MudSwitch T="bool" Value="context.Activo" ValueChanged="@(v => ToggleActivo(context, v))" Color="Color.Success" />
+                    </MudTd>
+                    <MudTd>
+                        <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"
+                                       OnClick="@(() => Eliminar(context))" />
+                    </MudTd>
+                </RowTemplate>
+            </MudTable>
+        </MudPaper>
+    </MudItem>
+
+    <MudItem xs="12" md="5">
+        <MudPaper Class="pa-4" Elevation="1">
+            <MudText Typo="Typo.subtitle1" Class="mb-2" Style="font-weight:600;">Horarios de los partes</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                Parametrizables en <code>appsettings</code> (sección <code>Asistencia</code>):
+            </MudText>
+            <MudList T="string" Dense="true">
+                <MudListItem T="string" Icon="@Icons.Material.Filled.WbSunny">Mañana: <b>@_opt.HoraParteManana</b></MudListItem>
+                <MudListItem T="string" Icon="@Icons.Material.Filled.WbTwilight">Tarde: <b>@_opt.HoraParteTarde</b></MudListItem>
+                <MudListItem T="string" Icon="@Icons.Material.Filled.Schedule">Zona horaria: <b>@_opt.TimeZone</b></MudListItem>
+            </MudList>
+            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                (La edición de horarios desde la UI queda para una próxima iteración.)
+            </MudText>
+        </MudPaper>
+    </MudItem>
+</MudGrid>
+
+@code {
+    private List<DestinatarioParte> _destinatarios = [];
+    private AsistenciaOptions _opt = new();
+    private string _nuevoNombre = string.Empty;
+    private string _nuevoTel = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _opt = AsistenciaOpt.Value;
+        await Cargar();
+    }
+
+    private async Task Cargar()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _destinatarios = await db.Destinatarios.OrderBy(d => d.Nombre).ToListAsync();
+    }
+
+    private async Task Agregar()
+    {
+        if (string.IsNullOrWhiteSpace(_nuevoTel))
+        {
+            Snackbar.Add("El teléfono es obligatorio.", Severity.Warning);
+            return;
+        }
+        await using var db = await DbFactory.CreateDbContextAsync();
+        db.Destinatarios.Add(new DestinatarioParte
+        {
+            Nombre = string.IsNullOrWhiteSpace(_nuevoNombre) ? "—" : _nuevoNombre.Trim(),
+            Telefono = _nuevoTel.Trim(),
+            Activo = true
+        });
+        await db.SaveChangesAsync();
+        _nuevoNombre = _nuevoTel = string.Empty;
+        await Cargar();
+        Snackbar.Add("Destinatario agregado.", Severity.Success);
+    }
+
+    private async Task ToggleActivo(DestinatarioParte d, bool valor)
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var e = await db.Destinatarios.FindAsync(d.Id);
+        if (e is null) return;
+        e.Activo = valor;
+        await db.SaveChangesAsync();
+        d.Activo = valor;
+    }
+
+    private async Task Eliminar(DestinatarioParte d)
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var e = await db.Destinatarios.FindAsync(d.Id);
+        if (e is null) return;
+        db.Destinatarios.Remove(e);
+        await db.SaveChangesAsync();
+        await Cargar();
+        Snackbar.Add("Destinatario eliminado.", Severity.Info);
+    }
+}

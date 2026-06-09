@@ -1,0 +1,121 @@
+@inherits LayoutComponentBase
+@inject NavigationManager Nav
+
+<AuthorizeView>
+    <Authorized>
+        <MudThemeProvider @bind-IsDarkMode="@_isDarkMode" Theme="_theme" />
+        <MudPopoverProvider />
+        <MudDialogProvider />
+        <MudSnackbarProvider />
+
+        <MudLayout>
+            <MudAppBar Elevation="1" Dense="true">
+                <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start"
+                               OnClick="@ToggleDrawer" />
+                <img src="@(_isDarkMode ? "img/isologotipo-negativo.svg" : "img/isologotipo-byn.svg")"
+                     alt="ESPERT" height="28" class="ml-3" />
+                <MudText Typo="Typo.subtitle1" Class="ml-3" Style="font-weight:600;">Novedades RRHH</MudText>
+                <MudSpacer />
+                <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="Color.Default" Class="mr-2">
+                    @context.User.Identity?.Name
+                </MudChip>
+                <MudIconButton Icon="@Icons.Material.Filled.Logout" Color="Color.Inherit"
+                               Href="/api/auth/logout" />
+                <MudIconButton Icon="@(_isDarkMode ? Icons.Material.Filled.LightMode : Icons.Material.Filled.DarkMode)"
+                               Color="Color.Inherit" OnClick="@ToggleDarkMode" />
+            </MudAppBar>
+
+            <MudDrawer @bind-Open="_drawerOpen" ClipMode="DrawerClipMode.Always" Elevation="2">
+                <div class="d-flex justify-center pa-3">
+                    <img src="@(_isDarkMode ? "img/isotipo-negativo.png" : "img/isotipo-byn.png")"
+                         alt="ESPERT" width="40" />
+                </div>
+                <MudDivider Class="mb-2" />
+                <NavMenu />
+            </MudDrawer>
+
+            <MudMainContent>
+                <MudContainer MaxWidth="MaxWidth.False" Class="pa-4">
+                    @Body
+                </MudContainer>
+            </MudMainContent>
+        </MudLayout>
+    </Authorized>
+    <NotAuthorized>
+        @{ Nav.NavigateTo("/login", forceLoad: true); }
+    </NotAuthorized>
+</AuthorizeView>
+
+@code {
+    private bool _drawerOpen = true;
+    private bool _isDarkMode = false;
+
+    private MudTheme _theme = new()
+    {
+        Typography = new Typography
+        {
+            Default = new DefaultTypography { FontFamily = ["Inter", "system-ui", "-apple-system", "sans-serif"] }
+        },
+        PaletteLight = new PaletteLight
+        {
+            Primary = "#A48242",
+            PrimaryDarken = "#7A6132",
+            PrimaryLighten = "#C4A866",
+            Secondary = "#53565A",
+            SecondaryDarken = "#36383B",
+            SecondaryLighten = "#97999B",
+            Tertiary = "#0891B2",
+            Info = "#3b82f6",
+            Success = "#059669",
+            Warning = "#D97706",
+            Error = "#E11D48",
+            AppbarBackground = "#FFFFFF",
+            AppbarText = "#53565A",
+            DrawerBackground = "#F4F4F5",
+            DrawerText = "#53565A",
+            Surface = "#FFFFFF",
+            Background = "#F4F4F5",
+            TextPrimary = "#1A1B1C",
+            TextSecondary = "#53565A",
+            TextDisabled = "#97999B",
+            ActionDefault = "#53565A",
+            ActionDisabled = "#97999B",
+            Divider = "#E0E1E2",
+            DividerLight = "#E0E1E2",
+            TableHover = "#FAF6ED",
+            TableStriped = "#F3F4F4"
+        },
+        PaletteDark = new PaletteDark
+        {
+            Primary = "#C4A866",
+            PrimaryDarken = "#A48242",
+            PrimaryLighten = "#D4BE8A",
+            Secondary = "#97999B",
+            SecondaryDarken = "#6E7175",
+            SecondaryLighten = "#C1C3C5",
+            Tertiary = "#06b6d4",
+            Info = "#60a5fa",
+            Success = "#10b981",
+            Warning = "#fbbf24",
+            Error = "#f43f5e",
+            AppbarBackground = "#1A1B1C",
+            AppbarText = "#d1d5db",
+            DrawerBackground = "#28292B",
+            DrawerText = "#d1d5db",
+            Surface = "#28292B",
+            Background = "#1A1B1C",
+            TextPrimary = "#f9fafb",
+            TextSecondary = "#9ca3af",
+            TextDisabled = "#6E7175",
+            ActionDefault = "#d1d5db",
+            ActionDisabled = "#6E7175",
+            Divider = "#36383B",
+            DividerLight = "#36383B",
+            TableHover = "#3D3118",
+            TableStriped = "#28292B"
+        }
+    };
+
+    private void ToggleDrawer() => _drawerOpen = !_drawerOpen;
+    private void ToggleDarkMode() => _isDarkMode = !_isDarkMode;
+}

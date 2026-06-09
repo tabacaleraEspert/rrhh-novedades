@@ -1,0 +1,18 @@
+@inject NavigationManager Nav
+
+<MudNavMenu>
+    <MudNavLink Href="/" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Dashboard">
+        Dashboard
+    </MudNavLink>
+    <MudNavLink Href="/mensajes" Icon="@Icons.Material.Filled.Send">
+        Bot de novedades
+    </MudNavLink>
+    <MudNavLink Href="/empleados" Icon="@Icons.Material.Filled.People">
+        Empleados
+    </MudNavLink>
+    <AuthorizeView Roles="Admin">
+        <MudNavLink Href="/configuracion" Icon="@Icons.Material.Filled.Settings">
+            Configuración
+        </MudNavLink>
+    </AuthorizeView>
+</MudNavMenu>

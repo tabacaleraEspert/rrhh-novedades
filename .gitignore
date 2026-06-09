@@ -1,0 +1,41 @@
+## .NET
+bin/
+obj/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.userprefs
+
+## VS Code
+.vscode/
+
+## Rider
+.idea/
+
+## OS
+Thumbs.db
+.DS_Store
+
+## Build results
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+
+## NuGet
+**/[Pp]ackages/*
+!**/[Pp]ackages/build/
+*.nupkg
+**/packages/repositories.config
+
+## Secrets (appsettings.json se commitea SIN keys — los secrets van en App Settings de Azure)
+**/appsettings.Development.json
+**/appsettings.*.local.json
+
+## Database
+*.mdf
+*.ldf
+
+## Secretos: API key de Humand en texto plano — NO commitear (mover a secrets/Azure)
+docs/humand/datos_api.md
