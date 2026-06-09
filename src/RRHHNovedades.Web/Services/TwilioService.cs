@@ -47,7 +47,7 @@ public class TwilioService : ITwilioService
         }
     }
 
-    public async Task<ResultadoEnvio> EnviarTemplateAsync(string toNumber, string contentSid, IDictionary<string, string> variables, CancellationToken ct = default)
+    public async Task<ResultadoEnvio> EnviarTemplateAsync(string toNumber, string contentSid, IReadOnlyDictionary<string, string> variables, CancellationToken ct = default)
     {
         if (!_enabled)
         {

@@ -6,9 +6,13 @@ using RRHHNovedades.Web.Options;
 
 namespace RRHHNovedades.Web.Services;
 
-public record ParteContenido(string Encabezado, string Cuerpo)
+public record ParteContenido(
+    string Encabezado,
+    string Cuerpo,
+    IReadOnlyDictionary<string, string> Variables)
 {
-    public string Completo => $"{Encabezado}\n{Cuerpo}";
+    /// <summary>Texto completo para preview y envío sin template (dev / sandbox).</summary>
+    public string Completo => $"{Encabezado}\n\n{Cuerpo}";
 }
 
 public record ParteEnvioResultado(int Enviados, int Fallidos, ParteContenido Contenido);
@@ -22,6 +26,7 @@ public interface IParteService
 /// <summary>
 /// Arma el parte de novedades por turno y lo envía al listado de destinatarios.
 /// Contenido: presentes (#), ausentes / justificados / tardanzas (nombre y apellido).
+/// El template de WhatsApp usa 8 variables de una sola línea (ver docs/TEMPLATE-PARTE.md).
 /// </summary>
 public class ParteService(
     IDbContextFactory<AppDbContext> dbFactory,
@@ -45,15 +50,30 @@ public class ParteService(
         var justificados = Nombres(novedades, EstadoJornada.AusenteJustificado);
 
         var turnoTxt = turno == Turno.Manana ? "Turno Mañana" : "Turno Tarde";
-        var encabezado = $"Novedades RR. HH. — {turnoTxt}, {fecha:dd/MM/yyyy}";
+        var tituloVar = $"{turnoTxt} · {fecha:dd/MM/yyyy}";          // variable {{1}}
+        var encabezado = $"Novedades RR. HH. — {tituloVar}";
 
+        // Variables del template (todas de una sola línea; nombres separados por "; ").
+        var variables = new Dictionary<string, string>
+        {
+            ["1"] = tituloVar,
+            ["2"] = presentes.ToString(),
+            ["3"] = tardanzas.Count.ToString(),
+            ["4"] = ListaTexto(tardanzas),
+            ["5"] = ausentes.Count.ToString(),
+            ["6"] = ListaTexto(ausentes),
+            ["7"] = justificados.Count.ToString(),
+            ["8"] = ListaTexto(justificados),
+        };
+
+        // Cuerpo para preview / envío sin template (refleja el template Opción 2).
         var cuerpo = new System.Text.StringBuilder();
-        cuerpo.AppendLine($"Presentes: {presentes}");
-        cuerpo.AppendLine(Linea("Tardanzas", tardanzas));
-        cuerpo.AppendLine(Linea("Ausentes", ausentes));
-        cuerpo.Append(Linea("Justificados", justificados));
+        cuerpo.AppendLine($"🟢 Presentes: {presentes}");
+        cuerpo.AppendLine($"🟡 Tardanzas ({tardanzas.Count}): {ListaTexto(tardanzas)}");
+        cuerpo.AppendLine($"🔴 Ausentes ({ausentes.Count}): {ListaTexto(ausentes)}");
+        cuerpo.Append($"🔵 Justificados ({justificados.Count}): {ListaTexto(justificados)}");
 
-        return new ParteContenido(encabezado, cuerpo.ToString());
+        return new ParteContenido(encabezado, cuerpo.ToString(), variables);
     }
 
     public async Task<ParteEnvioResultado> EnviarParteAsync(DateOnly fecha, Turno turno, CancellationToken ct = default)
@@ -68,16 +88,9 @@ public class ParteService(
         int ok = 0, fail = 0;
         foreach (var d in destinatarios)
         {
-            ResultadoEnvio r;
-            if (!string.IsNullOrWhiteSpace(_tw.ContentSidParte))
-            {
-                var vars = new Dictionary<string, string> { ["1"] = contenido.Encabezado, ["2"] = contenido.Cuerpo };
-                r = await twilio.EnviarTemplateAsync(d.Telefono, _tw.ContentSidParte, vars, ct);
-            }
-            else
-            {
-                r = await twilio.EnviarMensajeAsync(d.Telefono, contenido.Completo, ct);
-            }
+            var r = !string.IsNullOrWhiteSpace(_tw.ContentSidParte)
+                ? await twilio.EnviarTemplateAsync(d.Telefono, _tw.ContentSidParte, contenido.Variables, ct)
+                : await twilio.EnviarMensajeAsync(d.Telefono, contenido.Completo, ct);
 
             db.EnviosParte.Add(new EnvioParte
             {
@@ -104,8 +117,7 @@ public class ParteService(
           .OrderBy(x => x)
           .ToList();
 
-    private static string Linea(string etiqueta, List<string> nombres) =>
-        nombres.Count == 0
-            ? $"{etiqueta} (0): —"
-            : $"{etiqueta} ({nombres.Count}): {string.Join("; ", nombres)}";
+    // WhatsApp no permite variables vacías ni saltos de línea: lista en una línea, "—" si está vacía.
+    private static string ListaTexto(List<string> nombres) =>
+        nombres.Count == 0 ? "—" : string.Join("; ", nombres);
 }
