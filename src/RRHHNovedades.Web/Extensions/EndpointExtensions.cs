@@ -3,8 +3,10 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using RRHHNovedades.Web.Data;
 using RRHHNovedades.Web.Models;
+using RRHHNovedades.Web.Options;
 using RRHHNovedades.Web.Services;
 using System.Security.Claims;
 
@@ -79,6 +81,21 @@ public static class EndpointExtensions
             var f = fecha ?? DateOnly.FromDateTime(DateTime.Today);
             var c = await parte.ArmarParteAsync(f, turno, ct);
             return Results.Text(c.Completo);
+        });
+
+        // Envío de prueba a UN número puntual (no toca la lista de destinatarios).
+        ops.MapPost("/parte/test", async (
+            IParteService parte, ITwilioService twilio, IOptions<TwilioOptions> twOpt,
+            string to, Turno turno, DateOnly? fecha, CancellationToken ct) =>
+        {
+            var f = fecha ?? DateOnly.FromDateTime(DateTime.Today);
+            var c = await parte.ArmarParteAsync(f, turno, ct);
+            var tw = twOpt.Value;
+            var usaTemplate = !string.IsNullOrWhiteSpace(tw.ContentSidParte);
+            var r = usaTemplate
+                ? await twilio.EnviarTemplateAsync(to, tw.ContentSidParte, c.Variables, ct)
+                : await twilio.EnviarMensajeAsync(to, c.Completo, ct);
+            return Results.Ok(new { to, modo = usaTemplate ? "template" : "texto", r.Exito, r.MessageSid, r.Error, contenido = c.Completo });
         });
     }
 

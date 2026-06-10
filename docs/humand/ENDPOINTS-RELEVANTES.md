@@ -13,6 +13,32 @@ proyecto de **gastos** y son referencia de la mecánica general de la API.
 
 ---
 
+## ✅ Verificado en producción (jun-2026)
+
+Probado en vivo contra la API key real:
+
+| Endpoint | Resultado |
+|---|---|
+| `GET /users` | 200 (191 empleados) |
+| `GET /segmentations` | 200 |
+| `GET /time-off/requests` | 200 |
+| `GET /time-tracking/day-summaries?employeeIds&startDate&endDate` | **200** — trae `incidences`, `timeOffRequests`, `timeSlots`, `entries`, `hours` |
+| `GET /time-tracking/entries?employeeId&startDate&endDate` | **200** |
+| `GET /time-tracking/entries` (sin params) | 400 |
+
+> **Aclaración importante (vs. `docs/humand/humand-solicitud-endpoints.md`):** ese documento es de
+> **otro proyecto** (liquidación de sueldos) y concluye que no hay lectura de Time Tracking porque
+> `/time-tracking/entries` devolvía **400**. Eso era por **faltarle los parámetros requeridos**
+> (`employeeId`, `startDate`, `endDate`) — un endpoint inexistente da **404**, no 400. Además nunca
+> probaron `/time-tracking/day-summaries`. El **Manual V5 (nov-2025)** documenta Time Tracking como
+> solo-escritura (clockIn/clockOut) porque la lectura se agregó después. **Para este proyecto NO hace
+> falta solicitar nada a Humand: la lectura de asistencia ya funciona con la key actual.**
+
+**`policyTypeIds` reales de Espert** (de la doc de liquidación, para mapear ausencia justificada):
+`30371` Vacaciones · `30367` Lic. enfermedad · `30368` Días de estudio · `183319` Salidas anticipadas.
+
+---
+
 ## 1. El endpoint central: `GET /time-tracking/day-summaries`
 
 Resumen de jornada **por empleado y día**. Es la pieza que resuelve casi todo el dominio de novedades.
