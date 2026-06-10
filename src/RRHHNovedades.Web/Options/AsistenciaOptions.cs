@@ -18,4 +18,10 @@ public class AsistenciaOptions
 
     /// <summary>Tolerancia de tardanza en minutos (informativo; el LATE lo marca Humand).</summary>
     public int ToleranciaTardanzaMin { get; set; } = 10;
+
+    /// <summary>
+    /// Horarios extra de sincronización automática con Humand (HH:mm), además de la que ocurre
+    /// antes de cada parte. Configurable; default 2 veces por día.
+    /// </summary>
+    public List<string> AutoSyncHoras { get; set; } = ["10:30", "16:30"];
 }

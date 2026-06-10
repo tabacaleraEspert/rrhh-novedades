@@ -69,6 +69,20 @@ public static class EndpointExtensions
             return Results.Ok(new { empleados = emp, novedades = nov, fecha = f });
         });
 
+        // Backfill: sincroniza un rango de fechas (máx. 31 días) para histórico/tendencia.
+        ops.MapPost("/sync-rango", async (IIngestaService ingesta, DateOnly desde, DateOnly hasta, CancellationToken ct) =>
+        {
+            if (hasta < desde) return Results.BadRequest(new { error = "hasta < desde" });
+            if (hasta.DayNumber - desde.DayNumber > 31) return Results.BadRequest(new { error = "máximo 31 días por corrida" });
+
+            await ingesta.SincronizarEmpleadosAsync(ct);
+            var porDia = new Dictionary<string, int>();
+            for (var f = desde; f <= hasta; f = f.AddDays(1))
+                porDia[f.ToString("yyyy-MM-dd")] = await ingesta.SincronizarDiaAsync(f, ct);
+
+            return Results.Ok(new { desde, hasta, dias = porDia.Count, novedadesPorDia = porDia });
+        });
+
         ops.MapPost("/parte", async (IParteService parte, Turno turno, DateOnly? fecha, CancellationToken ct) =>
         {
             var f = fecha ?? DateOnly.FromDateTime(DateTime.Today);

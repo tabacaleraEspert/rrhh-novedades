@@ -1,38 +1,128 @@
 @page "/"
 @attribute [Authorize]
 @rendermode InteractiveServer
+@implements IDisposable
 @inject IDbContextFactory<AppDbContext> DbFactory
+@inject IIngestaService Ingesta
+@inject IJSRuntime JS
+@inject ISnackbar Snackbar
 @using RRHHNovedades.Web.Data
 @using RRHHNovedades.Web.Models
+@using RRHHNovedades.Web.Services
 
 <PageTitle>Dashboard - Novedades RRHH</PageTitle>
 
-<div class="d-flex align-center justify-space-between mb-1 flex-wrap">
+<div class="d-flex align-center justify-space-between mb-1 flex-wrap gap-2">
     <div>
         <MudText Typo="Typo.h5" Style="font-weight:600;">Dashboard</MudText>
-        <MudText Typo="Typo.body2" Color="Color.Secondary">Novedades del @_fecha.ToString("dd/MM/yyyy")</MudText>
+        <div class="d-flex align-center gap-1">
+            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                Novedades del @_fecha.ToString("dd/MM/yyyy") · actualizado @( _ultimaSync?.ToString("HH:mm") ?? "—")
+            </MudText>
+            <MudIconButton Icon="@Icons.Material.Filled.Sync" Size="Size.Small" Color="Color.Primary"
+                           OnClick="Sincronizar" Disabled="_syncing" title="Sincronizar desde Humand" />
+        </div>
     </div>
-    <div class="d-flex align-center gap-2">
-        <MudDatePicker Label="Fecha" Date="_fechaSel" DateChanged="OnFechaPicked" Style="max-width:170px;"
-                       DateFormat="dd/MM/yyyy" Editable="true" />
+    <div class="d-flex align-center gap-2 flex-wrap">
+        <MudDatePicker Label="Fecha" Date="_fechaSel" DateChanged="OnFechaPicked" Style="max-width:160px;"
+                       DateFormat="dd/MM/yyyy" Editable="true" Margin="Margin.Dense" />
+        <MudSelect T="string" Label="Área" Value="_area" ValueChanged="OnAreaChanged" Clearable="true"
+                   Style="min-width:180px;" Margin="Margin.Dense" Dense="true">
+            @foreach (var a in _areas)
+            {
+                <MudSelectItem T="string" Value="@a">@a</MudSelectItem>
+            }
+        </MudSelect>
         <MudButtonGroup Variant="Variant.Outlined" Size="Size.Small">
             <MudButton Color="@(_turno is null ? Color.Primary : Color.Default)" OnClick="@(() => SetTurno(null))">Global</MudButton>
             <MudButton Color="@(_turno == Turno.Manana ? Color.Primary : Color.Default)" OnClick="@(() => SetTurno(Turno.Manana))">Mañana</MudButton>
             <MudButton Color="@(_turno == Turno.Tarde ? Color.Primary : Color.Default)" OnClick="@(() => SetTurno(Turno.Tarde))">Tarde</MudButton>
         </MudButtonGroup>
+        <MudIconButton Icon="@Icons.Material.Filled.Download" Color="Color.Primary" OnClick="ExportarCsv"
+                       title="Exportar CSV" />
     </div>
 </div>
 
-<MudGrid Class="mt-1">
-    @KpiCard("Presentes", _kpi.Presentes, Color.Success, Icons.Material.Filled.CheckCircle)
-    @KpiCard("Tardanzas", _kpi.Tardanzas, Color.Warning, Icons.Material.Filled.Schedule)
-    @KpiCard("Ausentes", _kpi.Ausentes, Color.Error, Icons.Material.Filled.Cancel)
-    @KpiCard("Justificados", _kpi.Justificados, Color.Info, Icons.Material.Filled.FactCheck)
+<MudGrid Class="mt-1" Spacing="2">
+    <MudItem xs="6" sm="4" md="2" Style="flex-grow:1;max-width:none;">
+        <MudPaper Class="pa-4" Elevation="1">
+            <div class="d-flex align-center justify-space-between">
+                <MudText Typo="Typo.overline" Color="Color.Secondary">Asistencia</MudText>
+                <MudIcon Icon="@Icons.Material.Filled.Percent" Color="Color.Primary" Size="Size.Small" />
+            </div>
+            <MudText Typo="Typo.h4" Style="font-weight:600;">@(_kpi.Esperados > 0 ? $"{_kpi.PctAsistencia:0}%" : "—")</MudText>
+            <MudText Typo="Typo.caption" Color="Color.Secondary">@(_kpi.Presentes + _kpi.Tardanzas) de @_kpi.Esperados esperados</MudText>
+        </MudPaper>
+    </MudItem>
+    @KpiCard("Presentes", _kpi.Presentes, Color.Success, Icons.Material.Filled.CheckCircle, EstadoJornada.Presente)
+    @KpiCard("Tardanzas", _kpi.Tardanzas, Color.Warning, Icons.Material.Filled.Schedule, EstadoJornada.Tarde)
+    @KpiCard("Ausentes", _kpi.Ausentes, Color.Error, Icons.Material.Filled.Cancel, EstadoJornada.AusenteInjustificado)
+    @KpiCard("Justificados", _kpi.Justificados, Color.Info, Icons.Material.Filled.FactCheck, EstadoJornada.AusenteJustificado)
 </MudGrid>
 
-<MudPaper Class="mt-4" Elevation="1">
-    <MudTable Items="_filtradas" Dense="true" Hover="true" Loading="_loading" Breakpoint="Breakpoint.Sm">
-        <NoRecordsContent><MudText>Sin novedades para esta fecha. Ejecutá la sincronización desde el Bot de novedades.</MudText></NoRecordsContent>
+@if (_alertas.Count > 0)
+{
+    <MudAlert Severity="Severity.Warning" Class="mt-3" Dense="true" Icon="@Icons.Material.Filled.NotificationImportant">
+        @foreach (var a in _alertas)
+        {
+            <div>@a</div>
+        }
+    </MudAlert>
+}
+
+<MudGrid Class="mt-1" Spacing="2">
+    <MudItem xs="12" md="7">
+        <MudPaper Class="pa-4" Elevation="1" Style="height:100%;">
+            <MudText Typo="Typo.subtitle1" Style="font-weight:600;">Tendencia de asistencia (últimos 14 días)</MudText>
+            @if (_tendencia.Count > 1)
+            {
+                @((MarkupString)RenderTendenciaSvg())
+            }
+            else
+            {
+                <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-4">
+                    Sin histórico suficiente todavía — se va armando con cada día sincronizado.
+                </MudText>
+            }
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="12" md="5">
+        <MudPaper Class="pa-4" Elevation="1" Style="height:100%;">
+            <MudText Typo="Typo.subtitle1" Style="font-weight:600;">Ausentismo por área (del día)</MudText>
+            @if (_ausentismoArea.Count == 0)
+            {
+                <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-4">Sin ausencias injustificadas hoy.</MudText>
+            }
+            else
+            {
+                <MudSimpleTable Dense="true" Class="mt-1">
+                    <thead>
+                        <tr><th style="text-align:left;">Área</th><th style="text-align:right;">Ausentes</th><th style="text-align:right;">%</th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var a in _ausentismoArea)
+                        {
+                            <tr>
+                                <td>@a.Area</td>
+                                <td style="text-align:right;">@a.Ausentes / @a.Esperados</td>
+                                <td style="text-align:right;font-weight:600;color:@(a.Pct >= 20 ? "#E11D48" : "inherit");">@a.Pct.ToString("0")%</td>
+                            </tr>
+                        }
+                    </tbody>
+                </MudSimpleTable>
+            }
+        </MudPaper>
+    </MudItem>
+</MudGrid>
+
+<MudPaper Class="mt-3" Elevation="1">
+    <MudTable T="NovedadDiaria" Items="_filtradas" Dense="true" Hover="true" Loading="_loading" Breakpoint="Breakpoint.Sm"
+              OnRowClick="@(args => AbrirHistorial(args.Item))" RowClass="cursor-pointer">
+        <NoRecordsContent><MudText>Sin novedades para los filtros elegidos.</MudText></NoRecordsContent>
+        <ToolBarContent>
+            <MudTextField @bind-Value="_buscar" Placeholder="Buscar por nombre o área" Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Small" Class="mt-0" Immediate="true" />
+        </ToolBarContent>
         <HeaderContent>
             <MudTh>Empleado</MudTh>
             <MudTh>Área</MudTh>
@@ -46,7 +136,7 @@
             <MudTd DataLabel="Empleado">@context.Empleado.ApellidoNombre</MudTd>
             <MudTd DataLabel="Área">@(context.Empleado.Area ?? "—")</MudTd>
             <MudTd DataLabel="Turno">@(context.Turno == Turno.Manana ? "Mañana" : "Tarde")</MudTd>
-            <MudTd DataLabel="Estado"><MudChip T="string" Size="Size.Small" Color="EstadoColor(context.Estado)">@EstadoTexto(context.Estado)</MudChip></MudTd>
+            <MudTd DataLabel="Estado"><MudChip T="string" Size="Size.Small" Color="EstadoColor(context.Estado)">@ChipTexto(context)</MudChip></MudTd>
             <MudTd DataLabel="Entrada">@(context.HoraEntrada?.ToString("HH:mm") ?? "—")</MudTd>
             <MudTd DataLabel="Salida">@(context.HoraSalida?.ToString("HH:mm") ?? "—")</MudTd>
             <MudTd DataLabel="Motivo">@(context.MotivoNovedad ?? "—")</MudTd>
@@ -54,46 +144,286 @@
     </MudTable>
 </MudPaper>
 
+<MudDialog @bind-Visible="_histVisible" Options="_dlgOpts">
+    <TitleContent>
+        <MudText Typo="Typo.h6">@_histNombre — últimos 14 días</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudSimpleTable Dense="true">
+            <thead>
+                <tr><th style="text-align:left;">Fecha</th><th style="text-align:left;">Estado</th><th>Entrada</th><th>Salida</th><th style="text-align:left;">Motivo</th></tr>
+            </thead>
+            <tbody>
+                @foreach (var h in _histDias)
+                {
+                    <tr>
+                        <td>@h.Fecha.ToString("ddd dd/MM")</td>
+                        <td><MudChip T="string" Size="Size.Small" Color="EstadoColor(h.Estado)">@ChipTexto(h)</MudChip></td>
+                        <td style="text-align:center;">@(h.HoraEntrada?.ToString("HH:mm") ?? "—")</td>
+                        <td style="text-align:center;">@(h.HoraSalida?.ToString("HH:mm") ?? "—")</td>
+                        <td>@(h.MotivoNovedad ?? "—")</td>
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => _histVisible = false)">Cerrar</MudButton>
+    </DialogActions>
+</MudDialog>
+
 @code {
     private DateTime? _fechaSel = DateTime.Today;
     private DateOnly _fecha => DateOnly.FromDateTime(_fechaSel ?? DateTime.Today);
     private Turno? _turno;
+    private EstadoJornada? _estadoFiltro;
+    private string? _area;
+    private string _buscar = string.Empty;
     private bool _loading = true;
+    private bool _syncing;
+    private DateTime? _ultimaSync;
     private List<NovedadDiaria> _novedades = [];
+    private List<string> _areas = [];
+    private List<string> _alertas = [];
+    private List<(string Label, double Pct)> _tendencia = [];
+    private List<(string Area, int Ausentes, int Esperados, double Pct)> _ausentismoArea = [];
+    private readonly CancellationTokenSource _cts = new();
+
+    // Drill-down
+    private bool _histVisible;
+    private string _histNombre = string.Empty;
+    private List<NovedadDiaria> _histDias = [];
+    private readonly DialogOptions _dlgOpts = new() { MaxWidth = MaxWidth.Small, FullWidth = true, CloseOnEscapeKey = true };
+
+    // Pipeline de filtros: área+turno alimentan KPIs; estado+búsqueda solo afectan la tabla.
+    private IEnumerable<NovedadDiaria> _porFiltros =>
+        _novedades.Where(n => (_turno is null || n.Turno == _turno)
+                           && (_area is null || n.Empleado.Area == _area));
     private IEnumerable<NovedadDiaria> _filtradas =>
-        _turno is null ? _novedades : _novedades.Where(n => n.Turno == _turno);
+        _porFiltros.Where(n => (_estadoFiltro is null || n.Estado == _estadoFiltro) && PasaBusqueda(n));
 
-    private (int Presentes, int Tardanzas, int Ausentes, int Justificados) _kpi;
+    private (int Presentes, int Tardanzas, int Ausentes, int Justificados, int Esperados, double PctAsistencia) _kpi;
 
-    protected override async Task OnInitializedAsync() => await Cargar();
+    protected override async Task OnInitializedAsync()
+    {
+        await Cargar();
+        _ = RefrescoPeriodicoAsync(); // refresco visual cada 5 min
+    }
+
+    private async Task RefrescoPeriodicoAsync()
+    {
+        try
+        {
+            while (!_cts.IsCancellationRequested)
+            {
+                await Task.Delay(TimeSpan.FromMinutes(5), _cts.Token);
+                await Cargar();
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch (OperationCanceledException) { }
+    }
 
     private void SetTurno(Turno? t) { _turno = t; RecalcularKpi(); }
-
+    private void ToggleEstado(EstadoJornada estado) => _estadoFiltro = _estadoFiltro == estado ? null : estado;
     private async Task OnFechaPicked(DateTime? d) { _fechaSel = d; await Cargar(); }
+    private void OnAreaChanged(string? a) { _area = string.IsNullOrEmpty(a) ? null : a; RecalcularKpi(); }
+
+    private bool PasaBusqueda(NovedadDiaria n)
+    {
+        if (string.IsNullOrWhiteSpace(_buscar)) return true;
+        var q = _buscar.Trim().ToLowerInvariant();
+        return n.Empleado.NombreCompleto.ToLowerInvariant().Contains(q)
+            || (n.Empleado.Area ?? "").ToLowerInvariant().Contains(q);
+    }
 
     private async Task Cargar()
     {
         _loading = true;
         await using var db = await DbFactory.CreateDbContextAsync();
+
         _novedades = await db.Novedades.Include(n => n.Empleado)
             .Where(n => n.Fecha == _fecha)
-            .OrderBy(n => n.Empleado.Apellido).ToListAsync();
+            .OrderBy(n => n.Empleado.Apellido).ThenBy(n => n.Empleado.Nombre)
+            .ToListAsync();
+
+        _areas = _novedades.Select(n => n.Empleado.Area).Where(a => !string.IsNullOrWhiteSpace(a))
+            .Select(a => a!).Distinct().OrderBy(a => a).ToList();
+        _ultimaSync = _novedades.Count > 0 ? _novedades.Max(n => n.ActualizadoUtc).ToLocalTime() : null;
+
+        await CargarTendenciaAsync(db);
+        await CargarAlertasAsync(db);
+        CalcularAusentismoArea();
         RecalcularKpi();
         _loading = false;
     }
 
     private void RecalcularKpi()
     {
-        var src = _filtradas;
-        _kpi = (
-            src.Count(n => n.Estado == EstadoJornada.Presente),
-            src.Count(n => n.Estado == EstadoJornada.Tarde),
-            src.Count(n => n.Estado == EstadoJornada.AusenteInjustificado),
-            src.Count(n => n.Estado == EstadoJornada.AusenteJustificado));
+        var src = _porFiltros.ToList();
+        int p = src.Count(n => n.Estado == EstadoJornada.Presente);
+        int t = src.Count(n => n.Estado == EstadoJornada.Tarde);
+        int a = src.Count(n => n.Estado == EstadoJornada.AusenteInjustificado);
+        int j = src.Count(n => n.Estado == EstadoJornada.AusenteJustificado);
+        int esperados = src.Count(n => n.Estado != EstadoJornada.FrancoNoLaborable);
+        double pct = esperados > 0 ? (p + t) * 100.0 / esperados : 0;
+        _kpi = (p, t, a, j, esperados, pct);
     }
 
-    private RenderFragment KpiCard(string titulo, int valor, Color color, string icon) =>@<MudItem xs="6" md="3">
-        <MudPaper Class="pa-4" Elevation="1">
+    private async Task CargarTendenciaAsync(AppDbContext db)
+    {
+        var dias = await db.Novedades
+            .Where(n => n.Fecha <= _fecha)
+            .GroupBy(n => n.Fecha)
+            .Select(g => new
+            {
+                Fecha = g.Key,
+                Asistieron = g.Count(x => x.Estado == EstadoJornada.Presente || x.Estado == EstadoJornada.Tarde),
+                Esperados = g.Count(x => x.Estado != EstadoJornada.FrancoNoLaborable)
+            })
+            .OrderByDescending(x => x.Fecha).Take(14)
+            .ToListAsync();
+        dias.Reverse();
+
+        _tendencia = dias
+            .Select(d => (d.Fecha.ToString("dd/MM"),
+                          d.Esperados > 0 ? Math.Round(d.Asistieron * 100.0 / d.Esperados) : 0))
+            .ToList();
+    }
+
+    // Geometría del gráfico SVG (viewBox 640x230; área de trazado x:[40,624] y:[12,200]).
+    // Los helpers devuelven strings con punto decimal invariante (la cultura es-AR usa coma y rompe el SVG).
+    private double XVal(int i) =>
+        _tendencia.Count <= 1 ? 40 : 40 + i * (584.0 / (_tendencia.Count - 1));
+    private static double YVal(double pct) => 200 - pct / 100.0 * 188;
+    private static string Fmt(double v) => v.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture);
+
+    private string RenderTendenciaSvg()
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.Append("<svg viewBox=\"0 0 640 230\" style=\"width:100%;height:215px;\" preserveAspectRatio=\"none\">");
+        foreach (var pct in new[] { 0, 25, 50, 75, 100 })
+        {
+            var gy = YVal(pct);
+            sb.Append($"<line x1=\"34\" y1=\"{Fmt(gy)}\" x2=\"630\" y2=\"{Fmt(gy)}\" stroke=\"#E0E1E2\" stroke-width=\"1\" stroke-dasharray=\"3 3\" />");
+            sb.Append($"<text x=\"28\" y=\"{Fmt(gy + 4)}\" text-anchor=\"end\" font-size=\"10\" fill=\"#97999B\">{pct}</text>");
+        }
+        var puntos = string.Join(" ", _tendencia.Select((p, i) => $"{Fmt(XVal(i))},{Fmt(YVal(p.Pct))}"));
+        sb.Append($"<polyline points=\"{puntos}\" fill=\"none\" stroke=\"#A48242\" stroke-width=\"2.5\" stroke-linejoin=\"round\" stroke-linecap=\"round\" />");
+        for (int i = 0; i < _tendencia.Count; i++)
+        {
+            var p = _tendencia[i];
+            sb.Append($"<circle cx=\"{Fmt(XVal(i))}\" cy=\"{Fmt(YVal(p.Pct))}\" r=\"3.5\" fill=\"#A48242\"><title>{p.Label}: {p.Pct:0}%</title></circle>");
+            if (i % 2 == 0 || _tendencia.Count <= 7)
+                sb.Append($"<text x=\"{Fmt(XVal(i))}\" y=\"222\" text-anchor=\"middle\" font-size=\"10\" fill=\"#53565A\">{p.Label}</text>");
+        }
+        sb.Append("</svg>");
+        return sb.ToString();
+    }
+
+    private async Task CargarAlertasAsync(AppDbContext db)
+    {
+        _alertas = [];
+        var fechas = await db.Novedades.Where(n => n.Fecha <= _fecha)
+            .Select(n => n.Fecha).Distinct().OrderByDescending(f => f).Take(3).ToListAsync();
+        if (fechas.Count < 2) return;
+
+        var registros = await db.Novedades.Include(n => n.Empleado)
+            .Where(n => fechas.Contains(n.Fecha))
+            .Select(n => new { n.EmpleadoId, n.Fecha, n.Estado, Nombre = n.Empleado.Apellido + ", " + n.Empleado.Nombre })
+            .ToListAsync();
+
+        if (fechas.Count >= 3)
+        {
+            var tardeReincidente = registros.Where(r => r.Estado == EstadoJornada.Tarde)
+                .GroupBy(r => new { r.EmpleadoId, r.Nombre })
+                .Where(g => g.Select(x => x.Fecha).Distinct().Count() >= 3)
+                .Select(g => g.Key.Nombre).OrderBy(x => x).ToList();
+            if (tardeReincidente.Count > 0)
+                _alertas.Add($"Tardanza reincidente (3 días seguidos): {string.Join("; ", tardeReincidente)}");
+        }
+
+        var dosUltimas = fechas.Take(2).ToList();
+        var ausenteRepetido = registros.Where(r => r.Estado == EstadoJornada.AusenteInjustificado && dosUltimas.Contains(r.Fecha))
+            .GroupBy(r => new { r.EmpleadoId, r.Nombre })
+            .Where(g => g.Select(x => x.Fecha).Distinct().Count() >= 2)
+            .Select(g => g.Key.Nombre).OrderBy(x => x).ToList();
+        if (ausenteRepetido.Count > 0)
+            _alertas.Add($"Ausencia injustificada 2 días seguidos: {string.Join("; ", ausenteRepetido)}");
+    }
+
+    private void CalcularAusentismoArea()
+    {
+        _ausentismoArea = _novedades
+            .GroupBy(n => n.Empleado.Area ?? "—")
+            .Select(g => (
+                Area: g.Key,
+                Ausentes: g.Count(x => x.Estado == EstadoJornada.AusenteInjustificado),
+                Esperados: g.Count(x => x.Estado != EstadoJornada.FrancoNoLaborable)))
+            .Where(x => x.Esperados > 0 && x.Ausentes > 0)
+            .Select(x => (x.Area, x.Ausentes, x.Esperados, Pct: x.Ausentes * 100.0 / x.Esperados))
+            .OrderByDescending(x => x.Pct).ThenByDescending(x => x.Ausentes)
+            .Take(8)
+            .ToList();
+    }
+
+    private async Task Sincronizar()
+    {
+        _syncing = true;
+        try
+        {
+            await Ingesta.SincronizarEmpleadosAsync();
+            var n = await Ingesta.SincronizarDiaAsync(_fecha);
+            await Cargar();
+            Snackbar.Add($"Sincronizado: {n} novedades del {_fecha:dd/MM}.", Severity.Success);
+        }
+        catch (Exception ex) { Snackbar.Add($"Error al sincronizar: {ex.Message}", Severity.Error); }
+        finally { _syncing = false; }
+    }
+
+    private async Task AbrirHistorial(NovedadDiaria? n)
+    {
+        if (n is null) return;
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _histDias = await db.Novedades
+            .Where(x => x.EmpleadoId == n.EmpleadoId && x.Fecha <= _fecha)
+            .OrderByDescending(x => x.Fecha).Take(14)
+            .ToListAsync();
+        _histNombre = n.Empleado.ApellidoNombre;
+        _histVisible = true;
+    }
+
+    private async Task ExportarCsv()
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("Empleado;Area;Turno;Estado;MinTardanza;Entrada;Salida;Motivo");
+        foreach (var n in _filtradas)
+        {
+            sb.AppendLine(string.Join(";",
+                Csv(n.Empleado.ApellidoNombre), Csv(n.Empleado.Area ?? ""),
+                n.Turno == Turno.Manana ? "Mañana" : "Tarde",
+                EstadoTexto(n.Estado), n.MinutosTardanza,
+                n.HoraEntrada?.ToString("HH:mm") ?? "", n.HoraSalida?.ToString("HH:mm") ?? "",
+                Csv(n.MotivoNovedad ?? "")));
+        }
+        var bytes = System.Text.Encoding.UTF8.GetBytes("﻿" + sb); // BOM para Excel
+        await JS.InvokeVoidAsync("downloadFile", $"novedades_{_fecha:yyyy-MM-dd}.csv",
+            Convert.ToBase64String(bytes), "text/csv");
+    }
+
+    private static string Csv(string s) => s.Contains(';') || s.Contains('"')
+        ? "\"" + s.Replace("\"", "\"\"") + "\"" : s;
+
+    public void Dispose()
+    {
+        _cts.Cancel();
+        _cts.Dispose();
+    }
+
+    private RenderFragment KpiCard(string titulo, int valor, Color color, string icon, EstadoJornada estado) =>@<MudItem xs="6" sm="4" md="2" Style="flex-grow:1;max-width:none;">
+        <MudPaper Class="pa-4" Elevation="@(_estadoFiltro == estado ? 4 : 1)"
+                  Style="@($"cursor:pointer;user-select:none;height:100%;{(_estadoFiltro == estado ? "outline:2px solid var(--mud-palette-primary);" : "")}")"
+                  @onclick="@(() => ToggleEstado(estado))">
             <div class="d-flex align-center justify-space-between">
                 <MudText Typo="Typo.overline" Color="Color.Secondary">@titulo</MudText>
                 <MudIcon Icon="@icon" Color="@color" Size="Size.Small" />
@@ -101,6 +431,11 @@
             <MudText Typo="Typo.h4" Style="font-weight:600;">@valor</MudText>
         </MudPaper>
     </MudItem>;
+
+    private static string ChipTexto(NovedadDiaria n) =>
+        n.Estado == EstadoJornada.Tarde && n.MinutosTardanza > 0
+            ? $"Tarde {n.MinutosTardanza}′"
+            : EstadoTexto(n.Estado);
 
     private static Color EstadoColor(EstadoJornada e) => e switch
     {

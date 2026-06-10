@@ -18,6 +18,16 @@
     <Routes @rendermode="InteractiveServer" />
     <script src="_content/MudBlazor/MudBlazor.min.js"></script>
     <script src="@Assets["_framework/blazor.web.js"]"></script>
+    <script>
+        function downloadFile(filename, base64, contentType) {
+            const link = document.createElement('a');
+            link.href = 'data:' + contentType + ';base64,' + base64;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+    </script>
 </body>
 
 </html>

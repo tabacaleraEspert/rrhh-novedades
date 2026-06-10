@@ -5,15 +5,16 @@ using RRHHNovedades.Web.Options;
 namespace RRHHNovedades.Web.Services;
 
 /// <summary>
-/// Dispara los 2 partes diarios (mañana y tarde) en los horarios configurados (TZ Argentina).
-/// En cada disparo sincroniza el día desde Humand y envía el parte al listado de destinatarios.
+/// Dispara los 2 partes diarios (mañana y tarde) y las sincronizaciones automáticas extra,
+/// en los horarios configurados (TZ Argentina). Antes de cada parte sincroniza el día desde Humand.
 /// </summary>
 public class ParteScheduler(
     IServiceScopeFactory scopeFactory,
     IOptionsMonitor<AsistenciaOptions> asistencia,
     ILogger<ParteScheduler> logger) : BackgroundService
 {
-    private readonly HashSet<(DateOnly, Turno)> _disparados = [];
+    // Clave de disparo por día: "parte-Manana", "parte-Tarde", "sync-10:30", ...
+    private readonly HashSet<(DateOnly Dia, string Clave)> _disparados = [];
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -38,23 +39,36 @@ public class ParteScheduler(
         var hoy = DateOnly.FromDateTime(ahora.DateTime);
         var horaActual = TimeOnly.FromDateTime(ahora.DateTime);
 
-        // Limpiar disparos de días anteriores.
-        _disparados.RemoveWhere(d => d.Item1 < hoy);
+        _disparados.RemoveWhere(d => d.Dia < hoy);
 
+        // Partes (sincronizan + envían)
         foreach (var (turno, horaTxt) in new[]
                  {
                      (Turno.Manana, opt.HoraParteManana),
                      (Turno.Tarde, opt.HoraParteTarde)
                  })
         {
-            if (!TimeOnly.TryParse(horaTxt, out var hora)) continue;
-            if (horaActual < hora) continue;
-            if (_disparados.Contains((hoy, turno))) continue;
-
-            _disparados.Add((hoy, turno));
+            if (!Vence(horaTxt, horaActual, hoy, $"parte-{turno}")) continue;
             logger.LogInformation("Disparando parte {Turno} del {Hoy}", turno, hoy);
             await EjecutarParteAsync(hoy, turno, ct);
         }
+
+        // Sincronizaciones automáticas extra (solo refrescan datos, no envían)
+        foreach (var horaTxt in opt.AutoSyncHoras ?? [])
+        {
+            if (!Vence(horaTxt, horaActual, hoy, $"sync-{horaTxt}")) continue;
+            logger.LogInformation("Auto-sync de las {Hora} del {Hoy}", horaTxt, hoy);
+            await EjecutarSyncAsync(hoy, ct);
+        }
+    }
+
+    /// <summary>True si la hora configurada ya pasó hoy y todavía no se disparó (lo marca como disparado).</summary>
+    private bool Vence(string horaTxt, TimeOnly horaActual, DateOnly hoy, string clave)
+    {
+        if (!TimeOnly.TryParse(horaTxt, out var hora)) return false;
+        if (horaActual < hora) return false;
+        if (!_disparados.Add((hoy, clave))) return false;
+        return true;
     }
 
     private async Task EjecutarParteAsync(DateOnly fecha, Turno turno, CancellationToken ct)
@@ -66,6 +80,15 @@ public class ParteScheduler(
         await ingesta.SincronizarEmpleadosAsync(ct);
         await ingesta.SincronizarDiaAsync(fecha, ct);
         await parte.EnviarParteAsync(fecha, turno, ct);
+    }
+
+    private async Task EjecutarSyncAsync(DateOnly fecha, CancellationToken ct)
+    {
+        await using var scope = scopeFactory.CreateAsyncScope();
+        var ingesta = scope.ServiceProvider.GetRequiredService<IIngestaService>();
+
+        await ingesta.SincronizarEmpleadosAsync(ct);
+        await ingesta.SincronizarDiaAsync(fecha, ct);
     }
 
     private static TimeZoneInfo ResolverTimeZone(string id)

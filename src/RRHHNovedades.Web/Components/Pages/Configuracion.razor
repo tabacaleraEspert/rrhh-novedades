@@ -55,10 +55,16 @@
                 Parametrizables en <code>appsettings</code> (sección <code>Asistencia</code>):
             </MudText>
             <MudList T="string" Dense="true">
-                <MudListItem T="string" Icon="@Icons.Material.Filled.WbSunny">Mañana: <b>@_opt.HoraParteManana</b></MudListItem>
-                <MudListItem T="string" Icon="@Icons.Material.Filled.WbTwilight">Tarde: <b>@_opt.HoraParteTarde</b></MudListItem>
+                <MudListItem T="string" Icon="@Icons.Material.Filled.WbSunny">Parte mañana: <b>@_opt.HoraParteManana</b></MudListItem>
+                <MudListItem T="string" Icon="@Icons.Material.Filled.WbTwilight">Parte tarde: <b>@_opt.HoraParteTarde</b></MudListItem>
+                <MudListItem T="string" Icon="@Icons.Material.Filled.Sync">
+                    Auto-sync extra: <b>@(_opt.AutoSyncHoras is { Count: > 0 } h ? string.Join(" y ", h) : "—")</b>
+                </MudListItem>
                 <MudListItem T="string" Icon="@Icons.Material.Filled.Schedule">Zona horaria: <b>@_opt.TimeZone</b></MudListItem>
             </MudList>
+            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                Los datos se actualizan solos antes de cada parte y en los horarios de auto-sync.
+            </MudText>
             <MudText Typo="Typo.caption" Color="Color.Secondary">
                 (La edición de horarios desde la UI queda para una próxima iteración.)
             </MudText>
