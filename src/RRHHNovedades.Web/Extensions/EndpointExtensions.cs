@@ -76,6 +76,28 @@ public static class EndpointExtensions
             return Results.Ok(new { r.Enviados, r.Fallidos, contenido = r.Contenido.Completo });
         });
 
+        // Resumen por estado (sin datos personales) para validar la clasificación.
+        ops.MapGet("/resumen", async (IDbContextFactory<AppDbContext> dbFactory, DateOnly? fecha, CancellationToken ct) =>
+        {
+            var d = fecha ?? DateOnly.FromDateTime(DateTime.Today);
+            await using var db = await dbFactory.CreateDbContextAsync(ct);
+            var porEstado = await db.Novedades.Where(n => n.Fecha == d)
+                .GroupBy(n => n.Estado)
+                .Select(g => new { Estado = g.Key, Count = g.Count() })
+                .ToListAsync(ct);
+            var conMotivo = await db.Novedades.CountAsync(n => n.Fecha == d && n.MotivoNovedad != null, ct);
+            var porTurno = await db.Novedades.Where(n => n.Fecha == d)
+                .GroupBy(n => n.Turno).Select(g => new { Turno = g.Key, Count = g.Count() }).ToListAsync(ct);
+            return Results.Ok(new
+            {
+                fecha = d,
+                total = porEstado.Sum(x => x.Count),
+                porEstado = porEstado.ToDictionary(x => x.Estado.ToString(), x => x.Count),
+                porTurno = porTurno.ToDictionary(x => x.Turno.ToString(), x => x.Count),
+                conMotivoPermiso = conMotivo
+            });
+        });
+
         ops.MapGet("/parte/preview", async (IParteService parte, Turno turno, DateOnly? fecha, CancellationToken ct) =>
         {
             var f = fecha ?? DateOnly.FromDateTime(DateTime.Today);

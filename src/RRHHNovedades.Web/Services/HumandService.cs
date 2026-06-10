@@ -11,6 +11,7 @@ namespace RRHHNovedades.Web.Services;
 /// </summary>
 public class HumandService : IHumandService
 {
+    private const int PageLimit = 50; // Humand: el límite máximo permitido es 50.
     private readonly HttpClient _http;
     private readonly ILogger<HumandService> _logger;
     private static readonly JsonSerializerOptions Json = new()
@@ -35,7 +36,7 @@ public class HumandService : IHumandService
         int page = 1;
         while (true)
         {
-            var resp = await GetAsync($"users?page={page}&limit=100", ct);
+            var resp = await GetAsync($"users?page={page}&limit={PageLimit}", ct);
             using var doc = JsonDocument.Parse(resp);
             var root = doc.RootElement;
             if (!root.TryGetProperty("users", out var users) || users.GetArrayLength() == 0)
@@ -49,11 +50,11 @@ public class HumandService : IHumandService
                     id,
                     Str(u, "firstName") ?? string.Empty,
                     Str(u, "lastName") ?? string.Empty,
-                    Str(u, "phone"),
-                    Str(u, "department")));
+                    Str(u, "phoneNumber") ?? Str(u, "phone"),
+                    Segmentacion(u, "Sector")));
             }
 
-            if (users.GetArrayLength() < 100) break;
+            if (users.GetArrayLength() < PageLimit) break;
             page++;
         }
         _logger.LogInformation("Humand: {Count} empleados obtenidos", result.Count);
@@ -74,7 +75,7 @@ public class HumandService : IHumandService
             while (true)
             {
                 var idsCsv = string.Join(",", batch);
-                var resp = await GetAsync($"time-tracking/day-summaries?employeeIds={Uri.EscapeDataString(idsCsv)}&startDate={f}&endDate={f}&page={page}&limit=100", ct);
+                var resp = await GetAsync($"time-tracking/day-summaries?employeeIds={Uri.EscapeDataString(idsCsv)}&startDate={f}&endDate={f}&page={page}&limit={PageLimit}", ct);
                 using var doc = JsonDocument.Parse(resp);
                 var root = doc.RootElement;
                 if (!root.TryGetProperty("items", out var items) || items.GetArrayLength() == 0)
@@ -146,6 +147,16 @@ public class HumandService : IHumandService
     // ── helpers JSON ──
     private static string? Str(JsonElement e, string prop) =>
         e.TryGetProperty(prop, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
+
+    // Lee el ítem de una segmentación por nombre de grupo (ej. "Sector" = área).
+    private static string? Segmentacion(JsonElement u, string group)
+    {
+        if (u.TryGetProperty("segmentations", out var segs) && segs.ValueKind == JsonValueKind.Array)
+            foreach (var s in segs.EnumerateArray())
+                if (string.Equals(Str(s, "group"), group, StringComparison.OrdinalIgnoreCase))
+                    return Str(s, "item");
+        return null;
+    }
 
     private static bool Bool(JsonElement e, string prop, bool def) =>
         e.TryGetProperty(prop, out var v) && (v.ValueKind == JsonValueKind.True || v.ValueKind == JsonValueKind.False)
