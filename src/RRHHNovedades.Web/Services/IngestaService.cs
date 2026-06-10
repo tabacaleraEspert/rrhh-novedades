@@ -100,15 +100,20 @@ public class IngestaService(
     {
         bool absent = j.Incidences.Contains("ABSENT");
         bool late = j.Incidences.Contains("LATE");
+        bool ficho = j.HoraEntrada is not null;
         var motivo = j.PermisosDelDia.Count > 0 ? string.Join(", ", j.PermisosDelDia) : null;
+
+        // Permiso aprobado y no fichó ⇒ Justificado. Va ANTES que la regla de franco:
+        // con permiso (vacaciones, etc.) Humand quita el horario del día (isWorkday/hasSchedule
+        // = false) y NO marca ABSENT; el permiso viene embebido en timeOffRequests.
+        if (j.PermisosDelDia.Count > 0 && !ficho)
+            return (EstadoJornada.AusenteJustificado, motivo, 0);
 
         if (!j.IsWorkday || !j.HasSchedule)
             return (EstadoJornada.FrancoNoLaborable, motivo, 0);
 
         if (absent)
-            return j.PermisosDelDia.Count > 0
-                ? (EstadoJornada.AusenteJustificado, motivo, 0)
-                : (EstadoJornada.AusenteInjustificado, null, 0);
+            return (EstadoJornada.AusenteInjustificado, null, 0);
 
         if (late)
         {
@@ -118,13 +123,11 @@ public class IngestaService(
             return (EstadoJornada.Tarde, motivo, min);
         }
 
-        if (j.HoraEntrada is not null)
+        if (ficho)
             return (EstadoJornada.Presente, motivo, 0);
 
-        // No fichó y sin marca ABSENT explícita.
-        return j.PermisosDelDia.Count > 0
-            ? (EstadoJornada.AusenteJustificado, motivo, 0)
-            : (EstadoJornada.AusenteInjustificado, null, 0);
+        // Laborable, sin fichada, sin ABSENT explícito y sin permiso.
+        return (EstadoJornada.AusenteInjustificado, null, 0);
     }
 
     private static Turno InferirTurno(JornadaHumand j, Empleado emp, TimeOnly corte)

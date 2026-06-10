@@ -65,21 +65,41 @@ Resumen de jornada **por empleado y día**. Es la pieza que resuelve casi todo e
 Humand ya clasifica el día. Enum:
 `ABSENT`, `LATE`, `UNDERWORKED`, `EXTRA_HOURS`, `LOCATION_INCIDENCE`, `FACIAL_RECOGNITION_SKIPPED`, `AUTO_CLOSE`.
 
-Mapeo a nuestros estados de jornada:
+### Cómo representa Humand una ausencia justificada (verificado con datos reales, jun-2026)
 
-| Nuestro estado | Cómo se determina del day-summary |
+Cuando hay un permiso aprobado que cubre el día (vacaciones, día de estudio, etc.), Humand:
+- **NO marca `ABSENT`** en `incidences`;
+- **quita el horario del día**: `isWorkday=false` y `hasSchedule=false`;
+- **embebe el permiso** en `timeOffRequests` del propio day-summary (`[{id, name}]`).
+
+⇒ La decisión justificado/injustificado es **nuestra**, con la regla: *permiso del día + no fichó ⇒
+Justificado*. Y debe evaluarse **ANTES** que la regla de franco, porque el día con permiso parece
+"sin horario" (si se chequea franco primero, los de vacaciones caen como Franco y desaparecen del parte).
+
+Mapeo a nuestros estados de jornada (en este orden):
+
+| Orden | Nuestro estado | Cómo se determina del day-summary |
+|---|---|---|
+| 1 | **Ausente justificada** | `timeOffRequests` no vacío **y** sin fichada de entrada |
+| 2 | **Franco / No laborable** | `isWorkday=false` o `hasSchedule=false` (sin permiso) |
+| 3 | **Ausente injustificada** | `incidences` contiene `ABSENT` (a esta altura, sin permiso) |
+| 4 | **Tarde** | `incidences` contiene `LATE` (minutos: `entries` vs `timeSlots`) |
+| 5 | **Presente** | tiene fichada de entrada |
+| 6 | **Ausente injustificada** | laborable, sin fichada, sin permiso |
+
+| Otros | |
 |---|---|
-| **En hora** | `hasSchedule` y sin `ABSENT`/`LATE` en `incidences` |
-| **Tarde** | `incidences` contiene `LATE` (minutos exactos: derivar de `entries` vs `timeSlots`) |
-| **Ausente justificada** | `incidences` contiene `ABSENT` **y** `timeOffRequests` no vacío para el día |
-| **Ausente injustificada** | `incidences` contiene `ABSENT` **y** `timeOffRequests` vacío |
-| **Permiso / Licencia** | `timeOffRequests` cubre el día (sin necesidad de fichar) |
-| **Franco / No laborable** | `isWorkday=false` o `hasSchedule=false` |
 | **Horas extra** | `incidences` contiene `EXTRA_HOURS` (cantidad en `hours.worked` − `hours.scheduled`) |
 
 > Implicancia: **no hace falta un motor de cálculo de tardanza/ausencia desde cero**; se consume la
-> clasificación de Humand y sólo se resuelve justificada vs injustificada cruzando `timeOffRequests`,
-> más los minutos finos de tardanza si se quieren exactos.
+> clasificación de Humand (`LATE`/`ABSENT`) y la justificación se resuelve con los `timeOffRequests`
+> embebidos — sin llamada extra a `/time-off/requests` (ese endpoint queda para el detalle/auditoría).
+
+### ⚠️ Paginación de Humand — `totalPages` viene mal
+
+En `/time-tracking/day-summaries` (verificado en prod), **`totalPages` devuelve siempre 1** y `count`
+es el de la página, no el total. **Nunca** cortar por `totalPages`: paginar mientras la página venga
+llena (`items.length == limit`). El `limit` máximo es **50** (con más devuelve 400).
 
 `TimeTrackingEntry`: `{ id, userId, employeeInternalId, referenceDate, type: START|END, time: DateTime, source, site, comment }`.
 

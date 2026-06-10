@@ -84,8 +84,9 @@ public class HumandService : IHumandService
                 foreach (var it in items.EnumerateArray())
                     result.Add(MapJornada(it, fecha));
 
-                var totalPages = root.TryGetProperty("totalPages", out var tp) ? tp.GetInt32() : page;
-                if (page >= totalPages) break;
+                // OJO: el totalPages/count de Humand viene mal (siempre 1 / por página).
+                // Se pagina mientras la página venga llena.
+                if (items.GetArrayLength() < PageLimit) break;
                 page++;
             }
         }
