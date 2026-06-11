@@ -1,0 +1,155 @@
+@page "/ayuda"
+@attribute [Authorize]
+@rendermode InteractiveServer
+
+<PageTitle>Ayuda - Novedades RRHH</PageTitle>
+
+<MudText Typo="Typo.h5" Class="mb-1" Style="font-weight:600;">Ayuda y manual de uso</MudText>
+<MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
+    Guía rápida del sistema de Novedades de RR. HH. · Última actualización del manual: @UltimaActualizacion
+</MudText>
+
+<MudExpansionPanels MultiExpansion="true">
+
+    <MudExpansionPanel Expanded="true">
+        <TitleContent>
+            <div class="d-flex align-center gap-2"><MudIcon Icon="@Icons.Material.Filled.Info" Color="Color.Primary" /><MudText Style="font-weight:600;">¿Qué es este sistema?</MudText></div>
+        </TitleContent>
+        <ChildContent>
+            <MudText Typo="Typo.body2" Class="mb-2">
+                Lee automáticamente la <b>asistencia desde Humand</b> (fichadas, permisos y licencias), clasifica a cada
+                empleado por día y, con eso:
+            </MudText>
+            <MudList T="string" Dense="true">
+                <MudListItem T="string" Icon="@Icons.Material.Filled.Dashboard">Muestra el <b>Dashboard</b> con presentes, tardanzas, ausentes y justificados.</MudListItem>
+                <MudListItem T="string" Icon="@Icons.Material.Filled.Send">Envía <b>2 partes diarios por WhatsApp</b> al equipo de RR. HH. (mañana y tarde).</MudListItem>
+            </MudList>
+            <MudText Typo="Typo.body2" Class="mt-2">
+                No hay que cargar nada a mano acá: <b>la fuente de los datos es Humand</b>. Si algo está mal en el sistema
+                (una ausencia, un permiso), se corrige en Humand y este sistema lo refleja en la próxima actualización.
+            </MudText>
+        </ChildContent>
+    </MudExpansionPanel>
+
+    <MudExpansionPanel>
+        <TitleContent>
+            <div class="d-flex align-center gap-2"><MudIcon Icon="@Icons.Material.Filled.Rule" Color="Color.Primary" /><MudText Style="font-weight:600;">Cómo se clasifica a cada persona</MudText></div>
+        </TitleContent>
+        <ChildContent>
+            <MudSimpleTable Dense="true">
+                <tbody>
+                    <tr><td><MudChip T="string" Size="Size.Small" Color="Color.Success">Presente</MudChip></td><td>Fichó su ingreso en horario.</td></tr>
+                    <tr><td><MudChip T="string" Size="Size.Small" Color="Color.Warning">Tarde</MudChip></td><td>Fichó pasada la tolerancia. Se muestran los minutos de atraso (ej. "Tarde 25′").</td></tr>
+                    <tr><td><MudChip T="string" Size="Size.Small" Color="Color.Error">Ausente</MudChip></td><td>No fichó y <b>no tiene permiso</b> cargado en Humand que cubra el día.</td></tr>
+                    <tr><td><MudChip T="string" Size="Size.Small" Color="Color.Info">Justificado</MudChip></td><td>No vino pero <b>tiene permiso aprobado en Humand</b> (vacaciones, certificado médico, día de estudio, etc.). El motivo aparece en la columna "Motivo".</td></tr>
+                    <tr><td><MudChip T="string" Size="Size.Small" Color="Color.Default">Franco</MudChip></td><td>No le correspondía trabajar ese día (sin turno asignado / día no laborable).</td></tr>
+                </tbody>
+            </MudSimpleTable>
+            <MudAlert Severity="Severity.Info" Dense="true" Class="mt-3">
+                <b>Importante:</b> si alguien figura "Ausente" y después carga el permiso en Humand (o se lo cargan),
+                en la próxima actualización pasa <b>automáticamente</b> a "Justificado". No hay que tocar nada acá.
+            </MudAlert>
+        </ChildContent>
+    </MudExpansionPanel>
+
+    <MudExpansionPanel>
+        <TitleContent>
+            <div class="d-flex align-center gap-2"><MudIcon Icon="@Icons.Material.Filled.Dashboard" Color="Color.Primary" /><MudText Style="font-weight:600;">Uso del Dashboard</MudText></div>
+        </TitleContent>
+        <ChildContent>
+            <MudList T="string" Dense="true">
+                <MudListItem T="string" Icon="@Icons.Material.Filled.CalendarMonth"><b>Fecha:</b> elegí cualquier día (hoy o pasado) con el selector de arriba a la derecha.</MudListItem>
+                <MudListItem T="string" Icon="@Icons.Material.Filled.FilterAlt"><b>Filtros combinables:</b> turno (Global / Mañana / Tarde), área (desplegable) y estado — hacé <b>clic en una tarjeta KPI</b> (Presentes, Tardanzas, etc.) para ver solo esa gente; clic de nuevo para quitar el filtro.</MudListItem>
+                <MudListItem T="string" Icon="@Icons.Material.Filled.Search"><b>Buscador:</b> escribí un nombre o un área en el cuadro de búsqueda de la tabla.</MudListItem>
+                <MudListItem T="string" Icon="@Icons.Material.Filled.PersonSearch"><b>Detalle por persona:</b> hacé clic en cualquier fila para ver sus últimos 14 días (estado, horarios, motivos).</MudListItem>
+                <MudListItem T="string" Icon="@Icons.Material.Filled.ShowChart"><b>Tendencia:</b> el gráfico muestra el % de asistencia de los últimos 14 días (los fines de semana bajan, es normal).</MudListItem>
+                <MudListItem T="string" Icon="@Icons.Material.Filled.NotificationImportant"><b>Alertas:</b> aparece una franja amarilla si alguien llegó tarde 3 días seguidos o faltó sin justificar 2 días seguidos.</MudListItem>
+                <MudListItem T="string" Icon="@Icons.Material.Filled.Download"><b>Exportar:</b> el botón de descarga genera un Excel/CSV con lo que estés viendo (respeta los filtros).</MudListItem>
+                <MudListItem T="string" Icon="@Icons.Material.Filled.Sync"><b>Actualizar:</b> arriba se ve la hora de la última actualización; el botón ⟳ trae los datos frescos de Humand al instante.</MudListItem>
+            </MudList>
+        </ChildContent>
+    </MudExpansionPanel>
+
+    <MudExpansionPanel>
+        <TitleContent>
+            <div class="d-flex align-center gap-2"><MudIcon Icon="@Icons.Material.Filled.Send" Color="Color.Primary" /><MudText Style="font-weight:600;">El bot de WhatsApp (partes diarios)</MudText></div>
+        </TitleContent>
+        <ChildContent>
+            <MudText Typo="Typo.body2" Class="mb-2">
+                El sistema envía <b>dos partes por día</b> por WhatsApp, sin intervención de nadie:
+            </MudText>
+            <MudList T="string" Dense="true">
+                <MudListItem T="string" Icon="@Icons.Material.Filled.WbSunny"><b>Parte de la mañana</b> (07:00 por defecto): novedades del turno mañana.</MudListItem>
+                <MudListItem T="string" Icon="@Icons.Material.Filled.WbTwilight"><b>Parte de la tarde</b> (14:00 por defecto): novedades del turno tarde.</MudListItem>
+            </MudList>
+            <MudText Typo="Typo.body2" Class="my-2">
+                Cada parte incluye: <b>presentes</b> (cantidad), y <b>tardanzas, ausentes y justificados con nombre y apellido</b>.
+                Se envía a los teléfonos del listado de <b>Configuración → Destinatarios del parte</b>.
+            </MudText>
+            <MudText Typo="Typo.body2">
+                Desde la página <b>Bot de novedades</b> también se puede: <b>previsualizar</b> el parte antes de que salga,
+                <b>enviarlo manualmente</b> en cualquier momento, <b>sincronizar</b> los datos a demanda y ver el
+                <b>historial de envíos</b> (a quién salió, cuándo y si llegó bien).
+            </MudText>
+            <MudAlert Severity="Severity.Info" Dense="true" Class="mt-2">
+                El parte de la mañana es una <b>foto del momento del envío</b>: alguien que todavía no fichó puede figurar
+                como ausente y aparecer presente en el dashboard más tarde.
+            </MudAlert>
+        </ChildContent>
+    </MudExpansionPanel>
+
+    <MudExpansionPanel>
+        <TitleContent>
+            <div class="d-flex align-center gap-2"><MudIcon Icon="@Icons.Material.Filled.Schedule" Color="Color.Primary" /><MudText Style="font-weight:600;">¿Cuándo se actualizan los datos?</MudText></div>
+        </TitleContent>
+        <ChildContent>
+            <MudList T="string" Dense="true">
+                <MudListItem T="string" Icon="@Icons.Material.Filled.Autorenew">Automáticamente <b>antes de cada parte</b> (07:00 y 14:00).</MudListItem>
+                <MudListItem T="string" Icon="@Icons.Material.Filled.Autorenew">Automáticamente en los <b>horarios de auto-sync</b> (10:30 y 16:30 por defecto, configurables).</MudListItem>
+                <MudListItem T="string" Icon="@Icons.Material.Filled.TouchApp">A demanda, con el botón <b>⟳ del Dashboard</b> o "Sincronizar hoy" en Bot de novedades.</MudListItem>
+                <MudListItem T="string" Icon="@Icons.Material.Filled.Monitor">La pantalla del Dashboard además se <b>refresca sola cada 5 minutos</b>.</MudListItem>
+            </MudList>
+        </ChildContent>
+    </MudExpansionPanel>
+
+    <MudExpansionPanel>
+        <TitleContent>
+            <div class="d-flex align-center gap-2"><MudIcon Icon="@Icons.Material.Filled.Settings" Color="Color.Primary" /><MudText Style="font-weight:600;">Configuración (solo Admin)</MudText></div>
+        </TitleContent>
+        <ChildContent>
+            <MudList T="string" Dense="true">
+                <MudListItem T="string" Icon="@Icons.Material.Filled.ContactPhone"><b>Destinatarios del parte:</b> en Configuración se agregan/quitan los teléfonos que reciben los partes. Formato internacional: <code>+549</code> + código de área + número (ej. <code>+5492616934782</code>). El interruptor "Activo" permite pausar a alguien sin borrarlo.</MudListItem>
+                <MudListItem T="string" Icon="@Icons.Material.Filled.Schedule"><b>Horarios</b> de partes y auto-sync: por ahora se cambian en la configuración del servidor (pedirlo a Sistemas).</MudListItem>
+                <MudListItem T="string" Icon="@Icons.Material.Filled.People"><b>Empleados:</b> la lista se sincroniza sola desde Humand (altas, bajas y cambios de área). No se editan acá.</MudListItem>
+            </MudList>
+        </ChildContent>
+    </MudExpansionPanel>
+
+    <MudExpansionPanel>
+        <TitleContent>
+            <div class="d-flex align-center gap-2"><MudIcon Icon="@Icons.Material.Filled.Quiz" Color="Color.Primary" /><MudText Style="font-weight:600;">Preguntas frecuentes</MudText></div>
+        </TitleContent>
+        <ChildContent>
+            <MudText Typo="Typo.subtitle2" Class="mt-1">"Figura ausente, pero avisó que está enfermo"</MudText>
+            <MudText Typo="Typo.body2" Class="mb-3">Hay que cargar el certificado/permiso <b>en Humand</b>. En la próxima actualización pasa solo a "Justificado" con su motivo.</MudText>
+
+            <MudText Typo="Typo.subtitle2">"El parte dijo ausente y la persona estaba"</MudText>
+            <MudText Typo="Typo.body2" Class="mb-3">Probablemente fichó después del envío del parte. Verificalo en el Dashboard (que se actualiza durante el día) y revisá en Humand si la fichada quedó registrada.</MudText>
+
+            <MudText Typo="Typo.subtitle2">"A alguien del equipo no le llega el parte"</MudText>
+            <MudText Typo="Typo.body2" Class="mb-3">Revisar en Configuración que esté en el listado, <b>Activo</b>, y con el número bien escrito (+549...). El historial de envíos en "Bot de novedades" muestra si el envío falló y por qué.</MudText>
+
+            <MudText Typo="Typo.subtitle2">"¿Puedo ver un día anterior?"</MudText>
+            <MudText Typo="Typo.body2" Class="mb-3">Sí: cambiá la fecha en el Dashboard. El historial se guarda día por día.</MudText>
+
+            <MudText Typo="Typo.subtitle2">"¿Quién puede entrar al sistema?"</MudText>
+            <MudText Typo="Typo.body2">Usuarios con cuenta. Rol <b>Admin</b>: todo, incluida la Configuración. Rol <b>Operador</b>: dashboard y consultas. Las altas de usuarios las gestiona Sistemas.</MudText>
+        </ChildContent>
+    </MudExpansionPanel>
+
+</MudExpansionPanels>
+
+@code {
+    // Actualizar esta fecha cada vez que se modifique el manual (ver CLAUDE.md → "Manual de uso").
+    private const string UltimaActualizacion = "11/06/2026";
+}

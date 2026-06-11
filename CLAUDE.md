@@ -31,7 +31,8 @@ cd src/RRHHNovedades.Web && dotnet ef database update
 ```
 src/RRHHNovedades.Web/
 ├── Components/Pages/     → Home (dashboard), Mensajes (panel del bot),
-│                           Empleados, Configuracion, Login, Error, NotFound
+│                           Empleados, Configuracion, Ayuda (manual de uso),
+│                           Login, Error, NotFound
 ├── Components/Layout/    → MainLayout, EmptyLayout, NavMenu
 ├── Services/             → IHumandService (HumandService / MockHumandService),
 │                           IngestaService (sync+clasificación), ParteService (arma+envía),
@@ -79,6 +80,14 @@ WhatsApp a los `DestinatarioParte` activos. Disparo manual: página **Bot de nov
 - **Twilio (WhatsApp)**: `ITwilioService` **outbound only** (reutiliza la cuenta de ChatbotCobros, no toca
   su webhook). Envía con Content Template (`Twilio:ContentSidParte`) o texto plano (fallback dev).
   Diseño del template en `docs/TEMPLATE-PARTE.md`. Ref general: `docs/TWILIO-INTEGRACION.md`.
+
+## Manual de uso (página Ayuda) — MANTENER SIEMPRE
+La página `Components/Pages/Ayuda.razor` (`/ayuda`) es el **manual de uso para el usuario final**
+(RRHH, no técnico). Regla obligatoria: **cada cambio funcional visible para el usuario debe
+reflejarse en esa página en el mismo cambio** (nueva feature, filtro, horario, comportamiento del
+bot, etc.), actualizando también la constante `UltimaActualizacion`. Secciones actuales: qué es el
+sistema, clasificación de estados, uso del dashboard, bot de WhatsApp, cuándo se actualizan los
+datos, configuración y preguntas frecuentes. Escribir en lenguaje simple, sin jerga técnica.
 
 ## Convenciones de Código (heredadas de ChatbotCobros)
 - Usar `IDbContextFactory<AppDbContext>` (NUNCA inyectar DbContext directo)
