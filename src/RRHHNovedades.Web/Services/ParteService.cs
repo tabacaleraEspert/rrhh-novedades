@@ -53,25 +53,26 @@ public class ParteService(
         var tituloVar = $"{turnoTxt} · {fecha:dd/MM/yyyy}";          // variable {{1}}
         var encabezado = $"Novedades RR. HH. — {tituloVar}";
 
-        // Variables del template (todas de una sola línea; nombres separados por "; ").
+        // Variables del template: 5 en total, de una sola línea. Meta rechaza plantillas con
+        // demasiadas variables respecto del texto fijo, por eso cada categoría va como
+        // "cantidad (nombres)" en una única variable.
         var variables = new Dictionary<string, string>
         {
             ["1"] = tituloVar,
             ["2"] = presentes.ToString(),
-            ["3"] = tardanzas.Count.ToString(),
-            ["4"] = ListaTexto(tardanzas),
-            ["5"] = ausentes.Count.ToString(),
-            ["6"] = ListaTexto(ausentes),
-            ["7"] = justificados.Count.ToString(),
-            ["8"] = ListaTexto(justificados),
+            ["3"] = Seccion(tardanzas),
+            ["4"] = Seccion(ausentes),
+            ["5"] = Seccion(justificados),
         };
 
-        // Cuerpo para preview / envío sin template (refleja el template Opción 2).
+        // Cuerpo para preview / envío sin template (refleja el template aprobable).
         var cuerpo = new System.Text.StringBuilder();
         cuerpo.AppendLine($"🟢 Presentes: {presentes}");
-        cuerpo.AppendLine($"🟡 Tardanzas ({tardanzas.Count}): {ListaTexto(tardanzas)}");
-        cuerpo.AppendLine($"🔴 Ausentes ({ausentes.Count}): {ListaTexto(ausentes)}");
-        cuerpo.Append($"🔵 Justificados ({justificados.Count}): {ListaTexto(justificados)}");
+        cuerpo.AppendLine($"🟡 Tardanzas: {Seccion(tardanzas)}");
+        cuerpo.AppendLine($"🔴 Ausentes: {Seccion(ausentes)}");
+        cuerpo.AppendLine($"🔵 Justificados: {Seccion(justificados)}");
+        cuerpo.AppendLine();
+        cuerpo.Append("Reporte automático de asistencia · Tabacalera Espert");
 
         return new ParteContenido(encabezado, cuerpo.ToString(), variables);
     }
@@ -117,7 +118,8 @@ public class ParteService(
           .OrderBy(x => x)
           .ToList();
 
-    // WhatsApp no permite variables vacías ni saltos de línea: lista en una línea, "—" si está vacía.
-    private static string ListaTexto(List<string> nombres) =>
-        nombres.Count == 0 ? "—" : string.Join("; ", nombres);
+    // WhatsApp no permite variables vacías ni saltos de línea: "cantidad (nombres)" en una línea,
+    // "0" cuando no hay nadie.
+    private static string Seccion(List<string> nombres) =>
+        nombres.Count == 0 ? "0" : $"{nombres.Count} ({string.Join("; ", nombres)})";
 }

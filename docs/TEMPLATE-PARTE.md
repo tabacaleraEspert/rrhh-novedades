@@ -1,36 +1,38 @@
 # Template de Twilio — Parte de novedades
 
 Diseño del **Content Template** (plantilla de utilidad de WhatsApp) que el bot usa para enviar los
-2 partes diarios. Se crea en **Twilio Console → Content Template Builder**, se aprueba (Meta) y se copia
-el `ContentSid` (HX...) a la config `Twilio:ContentSidParte`.
+2 partes diarios.
 
-**Formato elegido: compacto con indicadores de color** (legible desde el celular).
-
----
-
-## ⚠️ Por qué las listas van por variables y los saltos de línea NO
-
-WhatsApp **rechaza** valores de variable que contengan saltos de línea, tabs o más de 4 espacios
-seguidos. Por eso el cuerpo (etiquetas, emojis y saltos de línea) va **fijo en la plantilla**, y por
-variables van solo valores de **una sola línea**: el encabezado, los números y las listas de nombres
-(separadas por `; `). Una variable nunca puede ir vacía → cuando no hay nombres se envía `—`.
+**Template vigente: `rrhh_envio_reporte_asistencia_v2` — SID `HX08a95a17f1d7bbee214071a9d9500e81`**
+(configurado en `Twilio:ContentSidParte`). Creado y enviado a aprobación por API el 11-jun-2026.
 
 ---
 
-## Cuerpo del template (copiar tal cual en el builder)
+## Historia / lecciones de aprobación
+
+- **v1 (`HX11f5072e...`) fue RECHAZADO por Meta** con: *"This template has too many variables for its
+  length. Reduce the number of variables or increase the message length."* Tenía 8 variables y poco
+  texto fijo.
+- **v2 corrige eso**: 5 variables (cantidad+nombres fusionados en una variable por categoría) y una
+  línea fija al pie que mejora el ratio texto/variables.
+- Reglas de Meta a respetar siempre: sin saltos de línea/tabs dentro de variables, variables nunca
+  vacías (usamos `"0"`), no empezar ni terminar el cuerpo con una variable, ratio razonable
+  texto fijo vs. variables, categoría **Utility**.
+
+## Cuerpo del template v2
 
 ```
 *Novedades RR. HH. — {{1}}*
 
 🟢 Presentes: {{2}}
-🟡 Tardanzas ({{3}}): {{4}}
-🔴 Ausentes ({{5}}): {{6}}
-🔵 Justificados ({{7}}): {{8}}
+🟡 Tardanzas: {{3}}
+🔴 Ausentes: {{4}}
+🔵 Justificados: {{5}}
+
+Reporte automático de asistencia · Tabacalera Espert
 ```
 
-- **Categoría:** Utility (utilidad) — mensajes proactivos transaccionales.
-- **Idioma:** Español.
-- **Tipo de contenido (Twilio):** `text` (sin botones, por ahora).
+- **Categoría:** Utility · **Idioma:** es_AR · **Tipo:** `twilio/text`.
 
 ## Variables (las arma `ParteService.ArmarParteAsync`)
 
@@ -38,12 +40,9 @@ variables van solo valores de **una sola línea**: el encabezado, los números y
 |-----|-----------|---------|
 | `{{1}}` | Turno · fecha | `Turno Mañana · 09/06/2026` |
 | `{{2}}` | Presentes (número) | `12` |
-| `{{3}}` | Tardanzas (cantidad) | `2` |
-| `{{4}}` | Tardanzas (apellido, nombre) | `Gómez, Rosa; Pérez, Juan` |
-| `{{5}}` | Ausentes (cantidad) | `3` |
-| `{{6}}` | Ausentes (apellido, nombre) | `López, Carla; Ruiz, Pedro; Sosa, Mario` |
-| `{{7}}` | Justificados (cantidad) | `1` |
-| `{{8}}` | Justificados (apellido, nombre) | `Díaz, Lucía` |
+| `{{3}}` | Tardanzas: cantidad (nombres) | `2 (Gómez, Rosa; Pérez, Juan)` — `0` si no hay |
+| `{{4}}` | Ausentes: cantidad (nombres) | `3 (López, Carla; Ruiz, Pedro; Sosa, Mario)` |
+| `{{5}}` | Justificados: cantidad (nombres) | `1 (Díaz, Lucía)` |
 
 ## Cómo se ve enviado
 
@@ -51,40 +50,35 @@ variables van solo valores de **una sola línea**: el encabezado, los números y
 *Novedades RR. HH. — Turno Mañana · 09/06/2026*
 
 🟢 Presentes: 12
-🟡 Tardanzas (2): Gómez, Rosa; Pérez, Juan
-🔴 Ausentes (3): López, Carla; Ruiz, Pedro; Sosa, Mario
-🔵 Justificados (1): Díaz, Lucía
+🟡 Tardanzas: 2 (Gómez, Rosa; Pérez, Juan)
+🔴 Ausentes: 3 (López, Carla; Ruiz, Pedro; Sosa, Mario)
+🔵 Justificados: 1 (Díaz, Lucía)
+
+Reporte automático de asistencia · Tabacalera Espert
 ```
 
-## Valores de muestra para la aprobación (sample values en el builder)
+## Gestión por API (cómo se creó la v2)
 
-- `{{1}}`: `Turno Mañana · 09/06/2026`
-- `{{2}}`: `12`  ·  `{{3}}`: `2`  ·  `{{4}}`: `Gómez, Rosa; Pérez, Juan`
-- `{{5}}`: `3`  ·  `{{6}}`: `López, Carla; Ruiz, Pedro; Sosa, Mario`
-- `{{7}}`: `1`  ·  `{{8}}`: `Díaz, Lucía`
+```bash
+# Crear template
+POST https://content.twilio.com/v1/Content
+{ "friendly_name": "...", "language": "es_AR", "variables": {samples}, "types": {"twilio/text": {"body": "..."}} }
 
----
+# Enviar a aprobación WhatsApp
+POST https://content.twilio.com/v1/Content/{HX}/ApprovalRequests/whatsapp
+{ "name": "...", "category": "UTILITY" }
 
-## Pasos en la consola de Twilio
+# Consultar estado / motivo de rechazo
+GET https://content.twilio.com/v1/Content/{HX}/ApprovalRequests
+```
 
-1. **Twilio Console → Messaging → Content Template Builder → Create new.**
-2. Nombre: `rrhh_novedades_parte` (o similar). Idioma: `es`. Categoría: **Utility**.
-3. Tipo: **Text**. Pegar el cuerpo de arriba (con los `{{1}}`…`{{8}}`).
-4. Cargar los **sample values** de arriba (Meta los pide para aprobar).
-5. Guardar y **enviar a aprobación de WhatsApp**.
-6. Cuando quede **Approved**, copiar el **Content SID** (`HX…`) a la config `Twilio:ContentSidParte`
-   (en `appsettings.secrets.local.json` / App Settings de Azure).
-
----
+> El contenido de un template es **inmutable**: ante un rechazo se crea un template nuevo
+> (nuevo SID) y se actualiza `Twilio:ContentSidParte`.
 
 ## Notas
-- Mientras `Twilio:ContentSidParte` esté vacío, la app envía el parte como **texto plano**
-  (`EnviarMensajeAsync`) — útil para probar en el Sandbox de WhatsApp. Con el `ContentSid` cargado,
-  pasa a usar el template automáticamente.
-- Los partes son **outbound** a la lista de RRHH; al ser plantilla de utilidad pre-aprobada no
-  requieren ventana de conversación abierta.
-- Credenciales (`AccountSid`, `AuthToken`, `WhatsAppNumber`) = las mismas de la cuenta Twilio de
-  ChatbotCobros. Van en secrets / App Settings de Azure, nunca en el repo.
-- Si más adelante se quieren botones (ej. "Ver detalle"), se cambia el tipo de contenido a
-  `twilio/quick-reply` o `card` y se vuelve a aprobar.
+- Mientras el template no esté **aprobado para "business initiated"**, los envíos proactivos del bot
+  no llegan; se puede probar la entrega abriendo ventana de 24 h (el destinatario le escribe "hola"
+  al número emisor) o con `Twilio:ContentSidParte` vacío (texto plano, requiere ventana abierta).
+- Los partes son **outbound** a la lista de RRHH (la cuenta Twilio es la de ChatbotCobros; no se toca
+  su webhook). Credenciales en secrets, nunca en el repo.
 - Ref general: `docs/TWILIO-INTEGRACION.md`.

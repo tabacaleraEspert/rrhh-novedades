@@ -60,9 +60,9 @@ public class ParteServiceTests
 
         Assert.Contains("Turno Mañana", c.Encabezado);
         Assert.Contains("Presentes: 1", c.Cuerpo);
-        Assert.Contains("Tardanzas (1): Gómez, Rosa", c.Cuerpo);
-        Assert.Contains("Ausentes (1): Sosa, Mario", c.Cuerpo);
-        Assert.Contains("Justificados (1): Díaz, Lucía", c.Cuerpo);
+        Assert.Contains("Tardanzas: 1 (Gómez, Rosa)", c.Cuerpo);
+        Assert.Contains("Ausentes: 1 (Sosa, Mario)", c.Cuerpo);
+        Assert.Contains("Justificados: 1 (Díaz, Lucía)", c.Cuerpo);
     }
 
     [Fact]
@@ -72,35 +72,33 @@ public class ParteServiceTests
         var c = await parte.ArmarParteAsync(new DateOnly(2026, 6, 9), Turno.Tarde);
 
         Assert.Contains("Presentes: 0", c.Cuerpo);
-        Assert.Contains("Ausentes (0): —", c.Cuerpo);
+        Assert.Contains("Ausentes: 0", c.Cuerpo);
     }
 
     [Fact]
-    public async Task Variables_del_template_mapean_1_a_8()
+    public async Task Variables_del_template_mapean_1_a_5()
     {
-        var (parte, _) = await SetupAsync(nameof(Variables_del_template_mapean_1_a_8));
+        var (parte, _) = await SetupAsync(nameof(Variables_del_template_mapean_1_a_5));
         var v = (await parte.ArmarParteAsync(new DateOnly(2026, 6, 9), Turno.Manana)).Variables;
 
+        Assert.Equal(5, v.Count);
         Assert.Equal("Turno Mañana · 09/06/2026", v["1"]);
         Assert.Equal("1", v["2"]);                              // presentes (número)
-        Assert.Equal("1", v["3"]);                              // tardanzas (cantidad)
-        Assert.Equal("Gómez, Rosa", v["4"]);                    // tardanzas (nombres)
-        Assert.Equal("1", v["5"]);                              // ausentes (cantidad)
-        Assert.Equal("Sosa, Mario", v["6"]);                    // ausentes (nombres)
-        Assert.Equal("1", v["7"]);                              // justificados (cantidad)
-        Assert.Equal("Díaz, Lucía", v["8"]);                    // justificados (nombres)
+        Assert.Equal("1 (Gómez, Rosa)", v["3"]);                // tardanzas
+        Assert.Equal("1 (Sosa, Mario)", v["4"]);                // ausentes
+        Assert.Equal("1 (Díaz, Lucía)", v["5"]);                // justificados
     }
 
     [Fact]
-    public async Task Variable_de_lista_vacia_es_guion_no_vacio()
+    public async Task Variable_de_lista_vacia_es_cero_no_vacio()
     {
-        // WhatsApp rechaza variables vacías → debe ser "—", nunca "".
-        var (parte, _) = await SetupAsync(nameof(Variable_de_lista_vacia_es_guion_no_vacio));
+        // WhatsApp rechaza variables vacías → debe ser "0", nunca "".
+        var (parte, _) = await SetupAsync(nameof(Variable_de_lista_vacia_es_cero_no_vacio));
         var v = (await parte.ArmarParteAsync(new DateOnly(2026, 6, 9), Turno.Tarde)).Variables;
 
-        Assert.Equal("—", v["4"]);
-        Assert.Equal("—", v["6"]);
-        Assert.Equal("—", v["8"]);
+        Assert.Equal("0", v["3"]);
+        Assert.Equal("0", v["4"]);
+        Assert.Equal("0", v["5"]);
         Assert.DoesNotContain(v.Values, string.IsNullOrEmpty);
     }
 }
