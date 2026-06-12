@@ -190,9 +190,13 @@ public class HumandService : IHumandService
     private static TimeOnly? ParseTime(string? s)
     {
         if (string.IsNullOrWhiteSpace(s)) return null;
+        // Hora "a secas" (ej. "08:00" de timeSlots): es literal, NO se convierte de zona.
+        // Si se intentara DateTimeOffset primero, "08:00" se interpretaría con la TZ de la
+        // máquina y en un servidor UTC quedaría corrida (lo detectó el CI).
+        if (TimeOnly.TryParse(s, System.Globalization.CultureInfo.InvariantCulture, out var t)) return t;
+        // Timestamp completo (ej. "2026-06-09T07:58:00.000-03:00" de entries): convertir a TZ AR.
         if (DateTimeOffset.TryParse(s, out var dto))
             return TimeOnly.FromDateTime(TimeZoneInfo.ConvertTime(dto, TzArgentina).DateTime);
-        if (TimeOnly.TryParse(s, out var t)) return t;
         return null;
     }
 
