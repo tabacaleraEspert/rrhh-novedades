@@ -172,10 +172,26 @@ public class HumandService : IHumandService
         return list;
     }
 
+    // TZ explícita: con LocalDateTime la hora dependería de la TZ del servidor (en Azure/UTC
+    // las fichadas saldrían corridas 3 horas).
+    private static readonly TimeZoneInfo TzArgentina = ResolverTzArgentina();
+
+    private static TimeZoneInfo ResolverTzArgentina()
+    {
+        foreach (var id in new[] { "America/Argentina/Buenos_Aires", "Argentina Standard Time" })
+        {
+            try { return TimeZoneInfo.FindSystemTimeZoneById(id); }
+            catch (TimeZoneNotFoundException) { }
+            catch (InvalidTimeZoneException) { }
+        }
+        return TimeZoneInfo.Utc;
+    }
+
     private static TimeOnly? ParseTime(string? s)
     {
         if (string.IsNullOrWhiteSpace(s)) return null;
-        if (DateTimeOffset.TryParse(s, out var dto)) return TimeOnly.FromDateTime(dto.LocalDateTime);
+        if (DateTimeOffset.TryParse(s, out var dto))
+            return TimeOnly.FromDateTime(TimeZoneInfo.ConvertTime(dto, TzArgentina).DateTime);
         if (TimeOnly.TryParse(s, out var t)) return t;
         return null;
     }

@@ -96,7 +96,8 @@ public class IngestaService(
         return n;
     }
 
-    private static (EstadoJornada estado, string? motivo, int minTarde) Clasificar(JornadaHumand j)
+    // internal para poder testearla directamente (InternalsVisibleTo RRHHNovedades.Tests).
+    internal static (EstadoJornada estado, string? motivo, int minTarde) Clasificar(JornadaHumand j)
     {
         bool absent = j.Incidences.Contains("ABSENT");
         bool late = j.Incidences.Contains("LATE");

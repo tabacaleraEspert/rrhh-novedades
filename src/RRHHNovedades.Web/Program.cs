@@ -12,10 +12,15 @@ CultureInfo.DefaultThreadCurrentUICulture = culture;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Secrets locales (gitignored) si existen
+// Secrets locales (gitignored) si existen. Se re-agregan las variables de entorno DESPUÉS
+// para que conserven la precedencia (entorno > secrets locales > appsettings); si no, el
+// archivo de secretos pisa los overrides de entorno (lo usa el smoke test para forzar mock).
 var secretsFile = Path.Combine(builder.Environment.ContentRootPath, "appsettings.secrets.local.json");
 if (File.Exists(secretsFile))
+{
     builder.Configuration.AddJsonFile(secretsFile, optional: true, reloadOnChange: false);
+    builder.Configuration.AddEnvironmentVariables();
+}
 
 // UI
 builder.Services.AddRazorComponents()

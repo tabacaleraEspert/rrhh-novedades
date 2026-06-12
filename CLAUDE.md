@@ -16,6 +16,9 @@ cd src/RRHHNovedades.Web && dotnet run
 # Tests (xUnit + NSubstitute)
 dotnet test tests/RRHHNovedades.Tests/
 
+# Smoke test E2E (mock Humand, Twilio off, DB separada RRHHNovedades_Smoke; ~1 min)
+bash tools/smoke-test.sh
+
 # Migraciones EF (cuando se defina el esquema definitivo)
 cd src/RRHHNovedades.Web && dotnet ef migrations add <Nombre>
 cd src/RRHHNovedades.Web && dotnet ef database update
@@ -80,6 +83,20 @@ WhatsApp a los `DestinatarioParte` activos. Disparo manual: página **Bot de nov
 - **Twilio (WhatsApp)**: `ITwilioService` **outbound only** (reutiliza la cuenta de ChatbotCobros, no toca
   su webhook). Envía con Content Template (`Twilio:ContentSidParte`) o texto plano (fallback dev).
   Diseño del template en `docs/TEMPLATE-PARTE.md`. Ref general: `docs/TWILIO-INTEGRACION.md`.
+
+## Harness de verificación — MANTENER SIEMPRE
+El proyecto tiene un harness para ejercitarlo sin tocar Humand/Twilio reales:
+- **Tests unitarios** (`tests/`): `ClasificadorJornadaTests` (casos reales congelados, incl. el caso
+  vacaciones donde Humand quita el horario), `HumandServiceTests` (HTTP fake con la forma real de la
+  API: limit máx 50, `totalPages` mentiroso, `phoneNumber`, segmentación `Sector`, TZ, backoff 429),
+  `ParteServiceTests` (formato del parte + restricciones de variables de Meta/WhatsApp).
+- **Smoke E2E**: `bash tools/smoke-test.sh` — levanta la app con mock + DB separada
+  (`RRHHNovedades_Smoke`, nunca la de dev), corre sync→clasificación→parte y valida el contenido.
+- **CI**: `.github/workflows/ci.yml` (build + tests en cada push/PR a main).
+
+Reglas: **todo bug encontrado en vivo se convierte en test antes de darse por cerrado**
+(así nacieron los tests de paginación, justificados y template). Correr tests después de cada
+cambio; el smoke antes de dar por buena una feature que cruce capas.
 
 ## Manual de uso (página Ayuda) — MANTENER SIEMPRE
 La página `Components/Pages/Ayuda.razor` (`/ayuda`) es el **manual de uso para el usuario final**
