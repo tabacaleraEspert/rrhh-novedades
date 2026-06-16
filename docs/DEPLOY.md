@@ -101,11 +101,17 @@ Luego subir el contenido de `./publish` al App Service (zip deploy, FTP, o
 ## 5. Primera corrida (verificación)
 
 1. Abrir la URL del App Service (`https://<app>.azurewebsites.net`).
-2. Al arrancar, la app crea las tablas automáticamente (`EnsureCreated`) y siembra el usuario
-   admin.
-3. **Login:**
-   - Usuario: `desarrollador1@tabacaleraespert.com`
-   - Contraseña: `espert`  ← **cambiarla de inmediato** (ver paso 6).
+2. Al arrancar, la app crea las tablas automáticamente (`EnsureCreated`) y siembra los usuarios
+   iniciales (ver tabla abajo). El sembrado es **idempotente por email**: si un usuario falta lo
+   agrega, sin pisar los existentes.
+3. **Login** — la app trae dos usuarios de fábrica, ambos con acceso completo:
+
+   | Usuario | Rol | Contraseña inicial |
+   |---|---|---|
+   | `desarrollador1@tabacaleraespert.com` | Admin | `espert` |
+   | `rrhh@tabacaleraespert.com` | RRHH | `espert` |
+
+   > **Cambiar ambas contraseñas de inmediato** (ver paso 6).
 4. Ir a **Configuración → Destinatarios del parte** y agregar los teléfonos reales del equipo
    de RRHH (formato `+549` + área + número). El destinatario de ejemplo que viene cargado está
    **inactivo**; dejarlo así o borrarlo.
@@ -116,12 +122,25 @@ Luego subir el contenido de `./publish` al App Service (zip deploy, FTP, o
 7. Si todo anduvo, el scheduler enviará los partes solo a las **07:00** y **14:00** (Argentina)
    todos los días.
 
+### Roles y permisos
+
+Hay dos roles, **ambos con acceso completo** al sistema (dashboard, bot de novedades y
+Configuración):
+
+- **RRHH** — el equipo de RR. HH. que administra el día a día (destinatarios, disparos manuales).
+- **Admin** — mismo acceso; pensado como cuenta de Sistemas/IT.
+
+Hoy son funcionalmente equivalentes; la distinción queda a nivel de identidad (quién entró) por si
+más adelante se quiere un rol de solo-lectura o reservar algo para Sistemas. Las altas de usuarios
+se hacen por base de datos / seed (no hay pantalla de alta todavía).
+
 ---
 
 ## 6. Seguridad post-deploy (importante)
 
-- [ ] **Cambiar la contraseña** del usuario `desarrollador1@tabacaleraespert.com` (viene como
-  `espert`). *(Hoy se cambia regenerando el hash en la base; si se necesita seguido, pedir una
+- [ ] **Cambiar las contraseñas** de los dos usuarios seed (`desarrollador1@tabacaleraespert.com`
+  y `rrhh@tabacaleraespert.com`, ambos vienen como `espert`). *(Hoy se cambia regenerando el hash
+  BCrypt en la columna `PasswordHash` de la tabla `Usuarios`; si se necesita seguido, pedir una
   pantalla de cambio de contraseña.)*
 - [ ] **Rotar la API Key de Humand** (`POST /api-keys/rotate` en la consola de Humand) y cargar
   la nueva en `Humand__ApiKey`. La key vieja anduvo por el chat / docs, así que conviene rotarla.
