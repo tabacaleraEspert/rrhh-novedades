@@ -56,10 +56,10 @@ public static class EndpointExtensions
         });
     }
 
-    /// <summary>Endpoints operativos para disparar manualmente la sincronización y el envío del parte (solo Admin).</summary>
+    /// <summary>Endpoints operativos para disparar manualmente la sincronización y el envío del parte (Admin y RRHH).</summary>
     private static void MapOpsEndpoints(this WebApplication app)
     {
-        var ops = app.MapGroup("/api/ops").RequireAuthorization(p => p.RequireRole(Roles.Admin));
+        var ops = app.MapGroup("/api/ops").RequireAuthorization(p => p.RequireRole(Roles.Admin, Roles.RRHH));
 
         ops.MapPost("/sync", async (IIngestaService ingesta, DateOnly? fecha, CancellationToken ct) =>
         {

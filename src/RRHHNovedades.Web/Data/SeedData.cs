@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using RRHHNovedades.Web.Models;
 
 namespace RRHHNovedades.Web.Data;
@@ -6,18 +7,11 @@ public static class SeedData
 {
     public static async Task InitializeAsync(AppDbContext db)
     {
-        if (!db.Usuarios.Any())
-        {
-            // Usuario admin inicial. Cambiar la contraseña en producción.
-            db.Usuarios.Add(new Usuario
-            {
-                Nombre = "Administrador",
-                Email = "desarrollador1@tabacaleraespert.com",
-                PasswordHash = BCrypt.Net.BCrypt.HashPassword("espert"),
-                Rol = Roles.Admin,
-                Activo = true
-            });
-        }
+        // Usuarios iniciales (idempotente por email: agrega los que falten sin pisar los existentes).
+        // Cambiar las contraseñas en producción.
+        await SeedUsuarioAsync(db, "Administrador", "desarrollador1@tabacaleraespert.com", "espert", Roles.Admin);
+        // Equipo de RRHH: ve el dashboard y las consultas, sin acceso a Configuración.
+        await SeedUsuarioAsync(db, "RRHH", "rrhh@tabacaleraespert.com", "espert", Roles.RRHH);
 
         if (!db.Destinatarios.Any())
         {
@@ -26,5 +20,18 @@ public static class SeedData
         }
 
         await db.SaveChangesAsync();
+    }
+
+    private static async Task SeedUsuarioAsync(AppDbContext db, string nombre, string email, string password, string rol)
+    {
+        if (await db.Usuarios.AnyAsync(u => u.Email == email)) return;
+        db.Usuarios.Add(new Usuario
+        {
+            Nombre = nombre,
+            Email = email,
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword(password),
+            Rol = rol,
+            Activo = true
+        });
     }
 }

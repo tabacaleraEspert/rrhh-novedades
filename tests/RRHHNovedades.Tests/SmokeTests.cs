@@ -6,9 +6,9 @@ namespace RRHHNovedades.Tests;
 public class SmokeTests
 {
     [Fact]
-    public void Roles_DefineAdminYOperador()
+    public void Roles_DefineAdminYRRHH()
     {
         Assert.Equal("Admin", Roles.Admin);
-        Assert.Equal("Operador", Roles.Operador);
+        Assert.Equal("RRHH", Roles.RRHH);
     }
 }

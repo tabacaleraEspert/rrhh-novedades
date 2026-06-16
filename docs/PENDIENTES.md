@@ -104,46 +104,18 @@ No bloquean arrancar (se trabajan con defaults configurables):
 
 ---
 
----
+## Para poner en producción
 
-## Para poner en producción (checklist deploy)
+> El MVP funciona completamente en local. Lo único que falta para que el bot envíe partes solo
+> es deploarlo. **Guía paso a paso completa: [`docs/DEPLOY.md`](DEPLOY.md).**
 
-> El MVP funciona completamente en local. Lo único que falta para que el bot envíe partes solo es deploarlo.
-
-### 1 — Azure App Service
-- [ ] Crear App Service (.NET 10, Windows) en la suscripción de ESPERT.
-- [ ] Crear Azure SQL Database (Basic/S0 alcanza para el volumen actual) o usar SQL Server existente.
-- [ ] Publicar desde VS (`dotnet publish` → Publish a Azure) o configurar GitHub Actions para deploy continuo.
-
-### 2 — Variables de entorno en Azure (App Settings)
-Estas variables reemplazan los valores locales; **no subir el `appsettings.secrets.local.json`**:
-
-| Variable | Valor |
-|---|---|
-| `ConnectionStrings__Default` | cadena de conexión Azure SQL |
-| `Humand__ApiKey` | key de producción (rotar la actual) |
-| `Humand__UseMock` | `false` |
-| `Twilio__AccountSid` | ver Twilio Console → Account Info |
-| `Twilio__AuthToken` | rotar en Twilio Console antes de cargar |
-| `Twilio__ContentSidParte` | ver `appsettings.json` (`Twilio:ContentSidParte`) |
-| `Twilio__From` | ver `appsettings.json` (`Twilio:From`) |
-
-### 3 — Primera corrida
-- [ ] App levanta → aplica `EnsureCreated` (crea tablas automáticamente).
-- [ ] Ir a **Configuración** → agregar destinatarios reales (Yanina + equipo RRHH).
-- [ ] Disparar **Sincronizar hoy** manualmente para verificar que la ingesta desde Humand funciona.
-- [ ] Disparar **Enviar parte ahora → Mañana** para confirmar entrega antes del primer disparo automático.
-
-### 4 — Seguridad post-deploy
-- [ ] Rotar `Humand:ApiKey` (`POST /api-keys/rotate` en la consola de Humand). Actualizar en Azure App Settings.
-- [ ] Rotar `Twilio:AuthToken` en Twilio Console → actualizar en Azure App Settings.
-- [ ] Cambiar la contraseña del usuario seed `desarrollador1@tabacaleraespert.com` (actualmente `espert`).
-- [ ] Mover el archivo `docs/humand/datos_api.md` fuera del repo o eliminarlo (tiene la key en texto plano).
-
-### 5 — Migraciones EF (cuando el esquema esté estable)
-- [ ] Reemplazar `EnsureCreatedAsync` por `MigrateAsync` en `Program.cs`.
-- [ ] Crear migración inicial: `dotnet ef migrations add Initial`.
-- [ ] Aplicar: `dotnet ef database update`.
+Resumen de lo pendiente para producción:
+- [ ] Deploy a **Azure App Service** (.NET 10, Windows, Always On) + **Azure SQL**.
+- [ ] Cargar las 5 variables secretas en App Settings (ver DEPLOY.md §3).
+- [ ] Cargar destinatarios reales en **Configuración** y probar un envío.
+- [ ] **Seguridad:** rotar API Key de Humand y Auth Token de Twilio; cambiar la contraseña seed;
+  eliminar `docs/humand/datos_api.md`.
+- [ ] **Migraciones EF:** reemplazar `EnsureCreated` por `Migrate` cuando el esquema se estabilice.
 
 ---
 

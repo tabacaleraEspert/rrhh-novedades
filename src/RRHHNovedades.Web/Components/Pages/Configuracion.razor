@@ -1,5 +1,5 @@
 @page "/configuracion"
-@attribute [Authorize(Roles = "Admin")]
+@attribute [Authorize(Roles = "Admin,RRHH")]
 @rendermode InteractiveServer
 @inject IDbContextFactory<AppDbContext> DbFactory
 @inject IOptions<AsistenciaOptions> AsistenciaOpt
