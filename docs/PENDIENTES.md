@@ -3,10 +3,15 @@
 Plan de ejecución por etapas. Base funcional: `docs/Novedades_RRHH.pdf` (spec v1.0) +
 **definiciones de la reunión (9-jun-2026)** abajo. Ver `CLAUDE.md`.
 
-> **Estado (9-jun-2026):** núcleo implementado y probado end-to-end con datos mock. Compila sin
-> warnings, 3 tests verdes, app levanta (LocalDB), scheduler dispara, parte se arma y "envía"
-> (modo Twilio DEV = log). Etapas 1–4 hechas en su versión MVP. Falta: credenciales Twilio reales +
-> template aprobado, y la API key de Humand para salir de mock.
+> **Estado (16-jun-2026):** **CADENA COMPLETA PROBADA END-TO-END** ✅. Template v2
+> `HX08a95a17f1d7bbee214071a9d9500e81` aprobado por Meta. Envío real a un número de prueba confirmado
+> `status=delivered` por la API de Twilio. 20 tests verdes + smoke E2E + CI (GitHub Actions).
+> Dashboard completo (KPIs, filtros, tendencia 14 días, ausentismo por área, alertas, drill-down,
+> export CSV), página de Ayuda, auto-sync configurable. Humand: key cargada, lectura validada.
+>
+> **Listo para producción salvo:** (1) **deploy a Azure** (sin esto el scheduler no corre solo);
+> (2) cargar destinatarios reales en Configuración; (3) migraciones EF (reemplazar EnsureCreated);
+> (4) rotar API key de Humand y AuthToken de Twilio (fueron por chat).
 
 ---
 
@@ -99,6 +104,49 @@ No bloquean arrancar (se trabajan con defaults configurables):
 
 ---
 
+---
+
+## Para poner en producción (checklist deploy)
+
+> El MVP funciona completamente en local. Lo único que falta para que el bot envíe partes solo es deploarlo.
+
+### 1 — Azure App Service
+- [ ] Crear App Service (.NET 10, Windows) en la suscripción de ESPERT.
+- [ ] Crear Azure SQL Database (Basic/S0 alcanza para el volumen actual) o usar SQL Server existente.
+- [ ] Publicar desde VS (`dotnet publish` → Publish a Azure) o configurar GitHub Actions para deploy continuo.
+
+### 2 — Variables de entorno en Azure (App Settings)
+Estas variables reemplazan los valores locales; **no subir el `appsettings.secrets.local.json`**:
+
+| Variable | Valor |
+|---|---|
+| `ConnectionStrings__Default` | cadena de conexión Azure SQL |
+| `Humand__ApiKey` | key de producción (rotar la actual) |
+| `Humand__UseMock` | `false` |
+| `Twilio__AccountSid` | ver Twilio Console → Account Info |
+| `Twilio__AuthToken` | rotar en Twilio Console antes de cargar |
+| `Twilio__ContentSidParte` | ver `appsettings.json` (`Twilio:ContentSidParte`) |
+| `Twilio__From` | ver `appsettings.json` (`Twilio:From`) |
+
+### 3 — Primera corrida
+- [ ] App levanta → aplica `EnsureCreated` (crea tablas automáticamente).
+- [ ] Ir a **Configuración** → agregar destinatarios reales (Yanina + equipo RRHH).
+- [ ] Disparar **Sincronizar hoy** manualmente para verificar que la ingesta desde Humand funciona.
+- [ ] Disparar **Enviar parte ahora → Mañana** para confirmar entrega antes del primer disparo automático.
+
+### 4 — Seguridad post-deploy
+- [ ] Rotar `Humand:ApiKey` (`POST /api-keys/rotate` en la consola de Humand). Actualizar en Azure App Settings.
+- [ ] Rotar `Twilio:AuthToken` en Twilio Console → actualizar en Azure App Settings.
+- [ ] Cambiar la contraseña del usuario seed `desarrollador1@tabacaleraespert.com` (actualmente `espert`).
+- [ ] Mover el archivo `docs/humand/datos_api.md` fuera del repo o eliminarlo (tiene la key en texto plano).
+
+### 5 — Migraciones EF (cuando el esquema esté estable)
+- [ ] Reemplazar `EnsureCreatedAsync` por `MigrateAsync` en `Program.cs`.
+- [ ] Crear migración inicial: `dotnet ef migrations add Initial`.
+- [ ] Aplicar: `dotnet ef database update`.
+
+---
+
 ## Etapas (reordenadas: el bot primero)
 
 ### Etapa 1 — Modelo de dominio mínimo + parámetros  ✅ HECHO
@@ -115,7 +163,7 @@ No bloquean arrancar (se trabajan con defaults configurables):
 - [x] Sync empleados desde `/users`; sync jornada desde `/time-tracking/day-summaries`.
 - [x] Clasificación: `incidences` (LATE/ABSENT) + cruce con `timeOffRequests` → Presente/Tarde/Just/Injust.
 - [x] Persistencia idempotente y reevaluable (`IngestaService`).
-- [ ] _(Pendiente)_ Validar contra la API real (cargar `Humand:ApiKey`, `UseMock=false`).
+- [x] ~~Validar contra la API real~~ — key cargada, datos reales verificados el 10-jun-2026 (16 tardanzas, 5 ausentes, 2 justificados correctos).
 
 ### Etapa 3 — 🎯 BOT: 2 partes diarios por WhatsApp  ✅ HECHO (envío en modo DEV)
 - [x] `TwilioService` outbound, con fallback DEV (loguea si no hay credenciales).
@@ -123,7 +171,8 @@ No bloquean arrancar (se trabajan con defaults configurables):
 - [x] `ParteScheduler` (`BackgroundService`) a las 07:00 y 14:00 (TZ Argentina), parametrizable.
 - [x] Envío por template (`ContentSidParte`) o texto plano; registro en `EnviosParte`.
 - [x] Endpoints ops (`/api/ops/sync`, `/parte`, `/parte/preview`) + panel en la página Bot.
-- [ ] _(Pendiente)_ Credenciales Twilio reales + `ContentSidParte` del template aprobado (ver `docs/TEMPLATE-PARTE.md`).
+- [x] ~~Credenciales Twilio reales~~ — cargadas en `appsettings.secrets.local.json`.
+- [x] ~~Template `ContentSidParte` aprobado~~ — `HX08a95a17f1d7bbee214071a9d9500e81` confirmado `delivered` el 16-jun-2026.
 
 ### Etapa 4 — Dashboard básico  ✅ HECHO
 - [x] KPI cards: Presentes, Ausentes, Tardanzas, Justificados.
