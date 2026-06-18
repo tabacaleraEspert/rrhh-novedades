@@ -229,7 +229,14 @@
 
     private void SetTurno(Turno? t) { _turno = t; RecalcularKpi(); }
     private void ToggleEstado(EstadoJornada estado) => _estadoFiltro = _estadoFiltro == estado ? null : estado;
-    private async Task OnFechaPicked(DateTime? d) { _fechaSel = d; await Cargar(); }
+    private async Task OnFechaPicked(DateTime? d)
+    {
+        _fechaSel = d;
+        await Cargar();
+        // Si la fecha elegida no tiene datos locales (y no es futura), traerla de Humand al toque.
+        if (_novedades.Count == 0 && _fecha <= Reloj.Hoy)
+            await Sincronizar();
+    }
     private void OnAreaChanged(string? a) { _area = string.IsNullOrEmpty(a) ? null : a; RecalcularKpi(); }
 
     private bool PasaBusqueda(NovedadDiaria n)

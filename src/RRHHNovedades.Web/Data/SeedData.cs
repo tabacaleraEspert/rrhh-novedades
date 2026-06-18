@@ -19,6 +19,10 @@ public static class SeedData
             db.Destinatarios.Add(new DestinatarioParte { Nombre = "RRHH (ejemplo)", Telefono = "+5491100000000", Activo = false });
         }
 
+        // Configuración del bot (fila única). Horarios editables desde la UI.
+        if (!await db.ConfiguracionParte.AnyAsync())
+            db.ConfiguracionParte.Add(new ConfiguracionParte { HoraParteManana = "07:00", HoraParteTarde = "14:00" });
+
         await db.SaveChangesAsync();
     }
 

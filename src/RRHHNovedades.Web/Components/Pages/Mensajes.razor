@@ -18,7 +18,7 @@
 
 <MudText Typo="Typo.h5" Class="mb-1" Style="font-weight:600;">Bot de novedades</MudText>
 <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
-    Partes automáticos: @_opt.HoraParteManana (mañana) y @_opt.HoraParteTarde (tarde) · @_opt.TimeZone
+    Partes automáticos: @_horaManana (mañana) y @_horaTarde (tarde) · @_opt.TimeZone
 </MudText>
 
 <MudGrid>
@@ -81,6 +81,8 @@
 
 @code {
     private AsistenciaOptions _opt = new();
+    private string _horaManana = "07:00";
+    private string _horaTarde = "14:00";
     private bool _busy;
     private string? _preview;
     private List<EnvioParte> _envios = [];
@@ -88,6 +90,11 @@
     protected override async Task OnInitializedAsync()
     {
         _opt = AsistenciaOpt.Value;
+        await using (var db = await DbFactory.CreateDbContextAsync())
+        {
+            var cfg = await db.ConfiguracionParte.FirstOrDefaultAsync();
+            if (cfg is not null) { _horaManana = cfg.HoraParteManana; _horaTarde = cfg.HoraParteTarde; }
+        }
         await CargarEnvios();
     }
 
