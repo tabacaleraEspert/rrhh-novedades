@@ -1,0 +1,85 @@
+name: Deploy (prod)
+
+# Despliega a Azure Container Apps en cada push a main (después de que CI compila y testea).
+# Estándar Espert: imagen al ACR compartido (tag {sha}+latest), deploy por workflow, smoke test.
+#
+# Requiere configurar en GitHub (Settings → Secrets and variables → Actions):
+#   Variables:  AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID,
+#               ACR_NAME (ej. acrespertshared), RESOURCE_GROUP (rg-rrhh-prod),
+#               CONTAINER_APP (ca-rrhh-prod)
+#   La identidad (OIDC) debe tener AcrPush en el ACR y Contributor en rg-rrhh-prod.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  id-token: write   # login OIDC sin secretos
+  contents: read
+
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+          dotnet-quality: 'preview'
+      - run: dotnet build RRHHNovedades.slnx -c Release
+      - run: dotnet test tests/RRHHNovedades.Tests/ -c Release --no-build --nologo
+
+  deploy:
+    needs: build-test
+    runs-on: ubuntu-latest
+    env:
+      IMAGE: rrhh-novedades
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      # Build server-side en el ACR (no necesita Docker en el runner). Tag {sha} + latest.
+      - name: Build & push image (ACR)
+        run: |
+          az acr build \
+            --registry ${{ vars.ACR_NAME }} \
+            --image ${{ env.IMAGE }}:${{ github.sha }} \
+            --image ${{ env.IMAGE }}:latest \
+            --file Dockerfile .
+
+      - name: Deploy a Container App
+        run: |
+          az containerapp update \
+            --name ${{ vars.CONTAINER_APP }} \
+            --resource-group ${{ vars.RESOURCE_GROUP }} \
+            --image ${{ vars.ACR_NAME }}.azurecr.io/${{ env.IMAGE }}:${{ github.sha }}
+
+      - name: Smoke test (post-deploy)
+        run: |
+          FQDN=$(az containerapp show -n ${{ vars.CONTAINER_APP }} -g ${{ vars.RESOURCE_GROUP }} \
+                 --query properties.configuration.ingress.fqdn -o tsv)
+          echo "Probando https://$FQDN ..."
+          for path in health ready; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' --retry 5 --retry-all-errors --retry-delay 5 "https://$FQDN/$path")
+            echo "/$path -> $code"
+            if [ "$code" != "200" ]; then echo "Smoke test FALLÓ en /$path"; exit 1; fi
+          done
+          echo "Smoke test OK."
+
+      # Purge de imágenes viejas en el ACR compartido (deja las últimas 10) — evita overage.
+      - name: Purge ACR (keep last 10)
+        continue-on-error: true
+        run: |
+          az acr run --registry ${{ vars.ACR_NAME }} \
+            --cmd "acr purge --filter '${{ env.IMAGE }}:.*' --keep 10 --untagged --ago 0d" /dev/null

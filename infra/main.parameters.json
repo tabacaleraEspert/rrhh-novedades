@@ -1,0 +1,20 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "location": { "value": "brazilsouth" },
+    "project": { "value": "rrhh" },
+    "env": { "value": "prod" },
+
+    "// logAnalyticsWorkspaceId": "Resource ID del Log Analytics COMPARTIDO (rg-espert-shared). Completar.",
+    "logAnalyticsWorkspaceId": { "value": "/subscriptions/<SUB_ID>/resourceGroups/rg-espert-shared/providers/Microsoft.OperationalInsights/workspaces/log-shared" },
+
+    "// acrLoginServer": "Login server del ACR COMPARTIDO. Completar (ej. acrespertshared.azurecr.io).",
+    "acrLoginServer": { "value": "<ACR_NAME>.azurecr.io" },
+
+    "// containerImage": "Imagen inicial. El primer deploy puede usar una imagen placeholder; el workflow la reemplaza.",
+    "containerImage": { "value": "<ACR_NAME>.azurecr.io/rrhh-novedades:latest" },
+
+    "pgAdminUser": { "value": "rrhhadmin" }
+  }
+}

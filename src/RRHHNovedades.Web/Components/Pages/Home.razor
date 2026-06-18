@@ -4,6 +4,7 @@
 @implements IDisposable
 @inject IDbContextFactory<AppDbContext> DbFactory
 @inject IIngestaService Ingesta
+@inject IReloj Reloj
 @inject IJSRuntime JS
 @inject ISnackbar Snackbar
 @using RRHHNovedades.Web.Data
@@ -58,6 +59,7 @@
     @KpiCard("Tardanzas", _kpi.Tardanzas, Color.Warning, Icons.Material.Filled.Schedule, EstadoJornada.Tarde)
     @KpiCard("Ausentes", _kpi.Ausentes, Color.Error, Icons.Material.Filled.Cancel, EstadoJornada.AusenteInjustificado)
     @KpiCard("Justificados", _kpi.Justificados, Color.Info, Icons.Material.Filled.FactCheck, EstadoJornada.AusenteJustificado)
+    @KpiCard("Pendientes", _kpi.Pendientes, Color.Default, Icons.Material.Filled.HourglassEmpty, EstadoJornada.Pendiente)
 </MudGrid>
 
 @if (_alertas.Count > 0)
@@ -173,8 +175,8 @@
 </MudDialog>
 
 @code {
-    private DateTime? _fechaSel = DateTime.Today;
-    private DateOnly _fecha => DateOnly.FromDateTime(_fechaSel ?? DateTime.Today);
+    private DateTime? _fechaSel;
+    private DateOnly _fecha => _fechaSel is { } f ? DateOnly.FromDateTime(f) : Reloj.Hoy;
     private Turno? _turno;
     private EstadoJornada? _estadoFiltro;
     private string? _area;
@@ -202,10 +204,11 @@
     private IEnumerable<NovedadDiaria> _filtradas =>
         _porFiltros.Where(n => (_estadoFiltro is null || n.Estado == _estadoFiltro) && PasaBusqueda(n));
 
-    private (int Presentes, int Tardanzas, int Ausentes, int Justificados, int Esperados, double PctAsistencia) _kpi;
+    private (int Presentes, int Tardanzas, int Ausentes, int Justificados, int Pendientes, int Esperados, double PctAsistencia) _kpi;
 
     protected override async Task OnInitializedAsync()
     {
+        _fechaSel ??= Reloj.Hoy.ToDateTime(TimeOnly.MinValue); // default: hoy en hora Argentina
         await Cargar();
         _ = RefrescoPeriodicoAsync(); // refresco visual cada 5 min
     }
@@ -249,7 +252,7 @@
 
         _areas = _novedades.Select(n => n.Empleado.Area).Where(a => !string.IsNullOrWhiteSpace(a))
             .Select(a => a!).Distinct().OrderBy(a => a).ToList();
-        _ultimaSync = _novedades.Count > 0 ? _novedades.Max(n => n.ActualizadoUtc).ToLocalTime() : null;
+        _ultimaSync = _novedades.Count > 0 ? Reloj.EnLocal(_novedades.Max(n => n.ActualizadoUtc)) : null;
 
         await CargarTendenciaAsync(db);
         await CargarAlertasAsync(db);
@@ -265,9 +268,12 @@
         int t = src.Count(n => n.Estado == EstadoJornada.Tarde);
         int a = src.Count(n => n.Estado == EstadoJornada.AusenteInjustificado);
         int j = src.Count(n => n.Estado == EstadoJornada.AusenteJustificado);
-        int esperados = src.Count(n => n.Estado != EstadoJornada.FrancoNoLaborable);
+        int pend = src.Count(n => n.Estado == EstadoJornada.Pendiente);
+        // "Esperados" = los que ya deberían haber marcado. Excluye francos y a los que su turno
+        // todavía no empezó (Pendiente), para que el % no se hunda por gente que aún no entró.
+        int esperados = src.Count(n => n.Estado != EstadoJornada.FrancoNoLaborable && n.Estado != EstadoJornada.Pendiente);
         double pct = esperados > 0 ? (p + t) * 100.0 / esperados : 0;
-        _kpi = (p, t, a, j, esperados, pct);
+        _kpi = (p, t, a, j, pend, esperados, pct);
     }
 
     private async Task CargarTendenciaAsync(AppDbContext db)
@@ -279,7 +285,7 @@
             {
                 Fecha = g.Key,
                 Asistieron = g.Count(x => x.Estado == EstadoJornada.Presente || x.Estado == EstadoJornada.Tarde),
-                Esperados = g.Count(x => x.Estado != EstadoJornada.FrancoNoLaborable)
+                Esperados = g.Count(x => x.Estado != EstadoJornada.FrancoNoLaborable && x.Estado != EstadoJornada.Pendiente)
             })
             .OrderByDescending(x => x.Fecha).Take(14)
             .ToListAsync();
@@ -359,7 +365,7 @@
             .Select(g => (
                 Area: g.Key,
                 Ausentes: g.Count(x => x.Estado == EstadoJornada.AusenteInjustificado),
-                Esperados: g.Count(x => x.Estado != EstadoJornada.FrancoNoLaborable)))
+                Esperados: g.Count(x => x.Estado != EstadoJornada.FrancoNoLaborable && x.Estado != EstadoJornada.Pendiente)))
             .Where(x => x.Esperados > 0 && x.Ausentes > 0)
             .Select(x => (x.Area, x.Ausentes, x.Esperados, Pct: x.Ausentes * 100.0 / x.Esperados))
             .OrderByDescending(x => x.Pct).ThenByDescending(x => x.Ausentes)
@@ -443,6 +449,7 @@
         EstadoJornada.Tarde => Color.Warning,
         EstadoJornada.AusenteInjustificado => Color.Error,
         EstadoJornada.AusenteJustificado => Color.Info,
+        EstadoJornada.Pendiente => Color.Default,
         _ => Color.Default
     };
 
@@ -452,6 +459,8 @@
         EstadoJornada.Tarde => "Tarde",
         EstadoJornada.AusenteInjustificado => "Ausente",
         EstadoJornada.AusenteJustificado => "Justificado",
+        EstadoJornada.Pendiente => "Pendiente",
+        EstadoJornada.FrancoNoLaborable => "Franco",
         _ => "Franco"
     };
 }

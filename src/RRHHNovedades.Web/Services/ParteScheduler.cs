@@ -11,6 +11,7 @@ namespace RRHHNovedades.Web.Services;
 public class ParteScheduler(
     IServiceScopeFactory scopeFactory,
     IOptionsMonitor<AsistenciaOptions> asistencia,
+    IReloj reloj,
     ILogger<ParteScheduler> logger) : BackgroundService
 {
     // Clave de disparo por día: "parte-Manana", "parte-Tarde", "sync-10:30", ...
@@ -18,12 +19,11 @@ public class ParteScheduler(
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        var tz = ResolverTimeZone(asistencia.CurrentValue.TimeZone);
-        logger.LogInformation("ParteScheduler activo (TZ {Tz})", tz.Id);
+        logger.LogInformation("ParteScheduler activo (TZ {Tz})", asistencia.CurrentValue.TimeZone);
 
         while (!stoppingToken.IsCancellationRequested)
         {
-            try { await TickAsync(tz, stoppingToken); }
+            try { await TickAsync(stoppingToken); }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 logger.LogError(ex, "Error en el tick del scheduler");
@@ -32,12 +32,11 @@ public class ParteScheduler(
         }
     }
 
-    private async Task TickAsync(TimeZoneInfo tz, CancellationToken ct)
+    private async Task TickAsync(CancellationToken ct)
     {
         var opt = asistencia.CurrentValue;
-        var ahora = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, tz);
-        var hoy = DateOnly.FromDateTime(ahora.DateTime);
-        var horaActual = TimeOnly.FromDateTime(ahora.DateTime);
+        var hoy = reloj.Hoy;
+        var horaActual = reloj.HoraActual;
 
         _disparados.RemoveWhere(d => d.Dia < hoy);
 
@@ -77,6 +76,15 @@ public class ParteScheduler(
         var ingesta = scope.ServiceProvider.GetRequiredService<IIngestaService>();
         var parte = scope.ServiceProvider.GetRequiredService<IParteService>();
 
+        // Guard persistente: si el parte de hoy ya salió (registrado en EnviosParte), no reenviar.
+        // El HashSet en memoria se borra en cada reinicio; sin esto, todo deploy/crash re-spamearía
+        // a RRHH (en Container Apps cada revisión reinicia el contenedor).
+        if (await parte.YaSeEnvioAsync(fecha, turno, ct))
+        {
+            logger.LogInformation("Parte {Turno} {Fecha} ya estaba enviado; se omite (evita reenvío por reinicio).", turno, fecha);
+            return;
+        }
+
         await ingesta.SincronizarEmpleadosAsync(ct);
         await ingesta.SincronizarDiaAsync(fecha, ct);
         await parte.EnviarParteAsync(fecha, turno, ct);
@@ -89,16 +97,5 @@ public class ParteScheduler(
 
         await ingesta.SincronizarEmpleadosAsync(ct);
         await ingesta.SincronizarDiaAsync(fecha, ct);
-    }
-
-    private static TimeZoneInfo ResolverTimeZone(string id)
-    {
-        foreach (var candidate in new[] { id, "Argentina Standard Time", "America/Argentina/Buenos_Aires" })
-        {
-            try { return TimeZoneInfo.FindSystemTimeZoneById(candidate); }
-            catch (TimeZoneNotFoundException) { }
-            catch (InvalidTimeZoneException) { }
-        }
-        return TimeZoneInfo.Utc;
     }
 }

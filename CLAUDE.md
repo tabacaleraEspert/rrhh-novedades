@@ -28,7 +28,9 @@ cd src/RRHHNovedades.Web && dotnet ef database update
 - MudBlazor 9.4.0 (UI components)
 - Twilio 7.14.9 (WhatsApp bot)
 - BCrypt.Net-Next 4.2.0 (auth)
-- EF Core SqlServer 10.0.8
+- EF Core 10 + Npgsql (PostgreSQL) — `UseNpgsql` en ServiceCollectionExtensions
+- Deploy: Docker → Azure Container Apps + PostgreSQL + Key Vault (`docs/DEPLOY-AZURE.md`)
+- Hora/fecha de negocio: SIEMPRE vía `IReloj` (TZ Argentina), nunca `DateTime.Now/Today`
 
 ## Arquitectura
 ```

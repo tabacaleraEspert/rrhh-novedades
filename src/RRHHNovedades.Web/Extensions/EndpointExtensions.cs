@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using RRHHNovedades.Web.Data;
@@ -61,9 +62,9 @@ public static class EndpointExtensions
     {
         var ops = app.MapGroup("/api/ops").RequireAuthorization(p => p.RequireRole(Roles.Admin, Roles.RRHH));
 
-        ops.MapPost("/sync", async (IIngestaService ingesta, DateOnly? fecha, CancellationToken ct) =>
+        ops.MapPost("/sync", async (IIngestaService ingesta, IReloj reloj, DateOnly? fecha, CancellationToken ct) =>
         {
-            var f = fecha ?? DateOnly.FromDateTime(DateTime.Today);
+            var f = fecha ?? reloj.Hoy;
             var emp = await ingesta.SincronizarEmpleadosAsync(ct);
             var nov = await ingesta.SincronizarDiaAsync(f, ct);
             return Results.Ok(new { empleados = emp, novedades = nov, fecha = f });
@@ -83,17 +84,17 @@ public static class EndpointExtensions
             return Results.Ok(new { desde, hasta, dias = porDia.Count, novedadesPorDia = porDia });
         });
 
-        ops.MapPost("/parte", async (IParteService parte, Turno turno, DateOnly? fecha, CancellationToken ct) =>
+        ops.MapPost("/parte", async (IParteService parte, IReloj reloj, Turno turno, DateOnly? fecha, CancellationToken ct) =>
         {
-            var f = fecha ?? DateOnly.FromDateTime(DateTime.Today);
+            var f = fecha ?? reloj.Hoy;
             var r = await parte.EnviarParteAsync(f, turno, ct);
             return Results.Ok(new { r.Enviados, r.Fallidos, contenido = r.Contenido.Completo });
         });
 
         // Resumen por estado (sin datos personales) para validar la clasificación.
-        ops.MapGet("/resumen", async (IDbContextFactory<AppDbContext> dbFactory, DateOnly? fecha, CancellationToken ct) =>
+        ops.MapGet("/resumen", async (IDbContextFactory<AppDbContext> dbFactory, IReloj reloj, DateOnly? fecha, CancellationToken ct) =>
         {
-            var d = fecha ?? DateOnly.FromDateTime(DateTime.Today);
+            var d = fecha ?? reloj.Hoy;
             await using var db = await dbFactory.CreateDbContextAsync(ct);
             var porEstado = await db.Novedades.Where(n => n.Fecha == d)
                 .GroupBy(n => n.Estado)
@@ -112,19 +113,19 @@ public static class EndpointExtensions
             });
         });
 
-        ops.MapGet("/parte/preview", async (IParteService parte, Turno turno, DateOnly? fecha, CancellationToken ct) =>
+        ops.MapGet("/parte/preview", async (IParteService parte, IReloj reloj, Turno turno, DateOnly? fecha, CancellationToken ct) =>
         {
-            var f = fecha ?? DateOnly.FromDateTime(DateTime.Today);
+            var f = fecha ?? reloj.Hoy;
             var c = await parte.ArmarParteAsync(f, turno, ct);
             return Results.Text(c.Completo);
         });
 
         // Envío de prueba a UN número puntual (no toca la lista de destinatarios).
         ops.MapPost("/parte/test", async (
-            IParteService parte, ITwilioService twilio, IOptions<TwilioOptions> twOpt,
+            IParteService parte, ITwilioService twilio, IOptions<TwilioOptions> twOpt, IReloj reloj,
             string to, Turno turno, DateOnly? fecha, CancellationToken ct) =>
         {
-            var f = fecha ?? DateOnly.FromDateTime(DateTime.Today);
+            var f = fecha ?? reloj.Hoy;
             var c = await parte.ArmarParteAsync(f, turno, ct);
             var tw = twOpt.Value;
             var usaTemplate = !string.IsNullOrWhiteSpace(tw.ContentSidParte);
@@ -137,24 +138,36 @@ public static class EndpointExtensions
 
     private static void MapHealthEndpoints(this WebApplication app)
     {
+        // Liveness: ¿el proceso está vivo? No toca dependencias (no chequea DB). Para que el
+        // orquestador no reinicie el contenedor por una caída transitoria de la base.
         app.MapHealthChecks("/health", new HealthCheckOptions
         {
-            ResponseWriter = async (context, report) =>
-            {
-                context.Response.ContentType = "application/json";
-                var result = new
-                {
-                    status = report.Status.ToString(),
-                    timestamp = DateTime.UtcNow,
-                    checks = report.Entries.Select(e => new
-                    {
-                        name = e.Key,
-                        status = e.Value.Status.ToString(),
-                        description = e.Value.Description
-                    })
-                };
-                await context.Response.WriteAsJsonAsync(result);
-            }
+            Predicate = _ => false, // sin checks: responde Healthy si el host respondió
+            ResponseWriter = EscribirReporte
         });
+
+        // Readiness: ¿está listo para recibir tráfico? Chequea la DB (checks con tag "ready").
+        app.MapHealthChecks("/ready", new HealthCheckOptions
+        {
+            Predicate = r => r.Tags.Contains("ready"),
+            ResponseWriter = EscribirReporte
+        });
+    }
+
+    private static async Task EscribirReporte(HttpContext context, HealthReport report)
+    {
+        context.Response.ContentType = "application/json";
+        var result = new
+        {
+            status = report.Status.ToString(),
+            timestamp = DateTime.UtcNow,
+            checks = report.Entries.Select(e => new
+            {
+                name = e.Key,
+                status = e.Value.Status.ToString(),
+                description = e.Value.Description
+            })
+        };
+        await context.Response.WriteAsJsonAsync(result);
     }
 }
