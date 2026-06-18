@@ -2,13 +2,14 @@
 //  RRHHNovedades — Infra prod (estándar Espert)
 //  Tier M: Container App (.NET 10 Blazor Server) + PostgreSQL Flexible + Key Vault.
 //  Región user-facing: Brazil South. DB en red privada (VNet), sin acceso público.
-//  Recursos compartidos (ACR, Log Analytics) se pasan por parámetro, NO se crean acá.
-//  Scope: resource group (rg-rrhh-prod). El RG lo crea el script de deploy.
+//  ACR y Log Analytics propios del proyecto (igual que gastos/facturación; el "shared"
+//  del estándar todavía no existe — es deuda futura de consolidación).
+//  Scope: resource group (rg-rrhh-prod). El RG y el ACR los crea el script de deploy.
 // ============================================================================
 
 targetScope = 'resourceGroup'
 
-@description('Región de los recursos user-facing.')
+@description('Región de los recursos.')
 param location string = 'brazilsouth'
 
 @description('Nombre de proyecto para el naming {tipo}-{proyecto}-{env}.')
@@ -18,11 +19,8 @@ param project string = 'rrhh'
 @allowed([ 'prod', 'staging', 'dev' ])
 param env string = 'prod'
 
-@description('Resource ID del Log Analytics COMPARTIDO (rg-espert-shared).')
-param logAnalyticsWorkspaceId string
-
-@description('Login server del ACR COMPARTIDO, ej. acrespertshared.azurecr.io')
-param acrLoginServer string
+@description('Nombre del ACR (lo crea el script antes, para poder buildear la imagen).')
+param acrName string
 
 @description('Imagen del contenedor a desplegar (acr/imagen:tag).')
 param containerImage string
@@ -43,11 +41,25 @@ var kvName = 'kv-${suffix}'
 var miName = 'id-${suffix}'
 var caeName = 'cae-${suffix}'
 var caName = 'ca-${suffix}'
+var logName = 'log-${suffix}'
 
 var tags = {
   proyecto: project
   env: env
   app: 'RRHHNovedades'
+}
+
+// ============================================================================
+//  Observabilidad: Log Analytics del proyecto.
+// ============================================================================
+resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2022-10-01' = {
+  name: logName
+  location: location
+  tags: tags
+  properties: {
+    sku: { name: 'PerGB2018' }
+    retentionInDays: 30
+  }
 }
 
 // ============================================================================
@@ -61,10 +73,17 @@ resource vnet 'Microsoft.Network/virtualNetworks@2024-05-01' = {
     addressSpace: { addressPrefixes: [ '10.20.0.0/16' ] }
     subnets: [
       {
-        // Container Apps (Consumption) necesita una subred propia de al menos /23.
+        // Container Apps (Consumption) necesita una subred propia de al menos /23,
+        // delegada al servicio Microsoft.App/environments.
         name: 'snet-infra'
         properties: {
           addressPrefix: '10.20.0.0/23'
+          delegations: [
+            {
+              name: 'cae-delegation'
+              properties: { serviceName: 'Microsoft.App/environments' }
+            }
+          ]
         }
       }
       {
@@ -156,10 +175,10 @@ resource pgDatabase 'Microsoft.DBforPostgreSQL/flexibleServers/databases@2024-08
 // ============================================================================
 //  Identidad + Key Vault (secretos accedidos por Managed Identity).
 // ============================================================================
-// La MI se crea ANTES (en deploy.sh) para poder asignarle AcrPull en el ACR compartido (otro RG)
-// previo a crear el Container App. Acá la referenciamos como existente.
-resource mi 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' existing = {
+resource mi 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
   name: miName
+  location: location
+  tags: tags
 }
 
 resource kv 'Microsoft.KeyVault/vaults@2023-07-01' = {
@@ -188,14 +207,24 @@ resource kvRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   }
 }
 
+// La MI puede PULL del ACR del proyecto (AcrPull).
+resource acr 'Microsoft.ContainerRegistry/registries@2023-07-01' existing = {
+  name: acrName
+}
+var acrPullRoleId = '7f951dda-4ed3-4680-a7ca-43fe172d538d'
+resource acrRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  scope: acr
+  name: guid(acr.id, mi.id, acrPullRoleId)
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', acrPullRoleId)
+    principalId: mi.properties.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
 // ============================================================================
 //  Container Apps: environment (con VNet + logs) + la app.
 // ============================================================================
-resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2022-10-01' existing = {
-  name: last(split(logAnalyticsWorkspaceId, '/'))
-  scope: resourceGroup(split(logAnalyticsWorkspaceId, '/')[4])
-}
-
 resource cae 'Microsoft.App/managedEnvironments@2024-03-01' = {
   name: caeName
   location: location
@@ -238,7 +267,7 @@ resource ca 'Microsoft.App/containerApps@2024-03-01' = {
       }
       registries: [
         {
-          server: acrLoginServer
+          server: acr.properties.loginServer
           identity: mi.id
         }
       ]
@@ -283,6 +312,7 @@ resource ca 'Microsoft.App/containerApps@2024-03-01' = {
       }
     }
   }
+  dependsOn: [ acrRole ]
 }
 
 // --- Outputs (los usa el script para cargar secretos y verificar) ----------
@@ -291,6 +321,5 @@ output keyVaultUri string = kv.properties.vaultUri
 output pgFqdn string = pg.properties.fullyQualifiedDomainName
 output pgDatabase string = pgDbName
 output managedIdentityName string = mi.name
-output managedIdentityPrincipalId string = mi.properties.principalId
 output containerAppName string = ca.name
 output containerAppFqdn string = ca.properties.configuration.ingress.fqdn

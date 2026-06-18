@@ -10,9 +10,13 @@ Internet ──► Container App (ca-rrhh-prod, ingress HTTPS + session affinity
                  │  .NET 10 Blazor Server + bot (scheduler in-process)
                  ├─► PostgreSQL Flexible (pg-rrhh-prod) — VNet privada, sin acceso público
                  ├─► Key Vault (kv-rrhh-prod) ◄── Managed Identity (id-rrhh-prod)
-                 ├─► ACR compartido (imagen)          [rg-espert-shared]
-                 └─► Log Analytics compartido (logs)  [rg-espert-shared]
+                 ├─► ACR del proyecto (imagen)        [acrrrhhprod]
+                 └─► Log Analytics del proyecto (logs) [log-rrhh-prod]
 ```
+
+> Nota: el estándar apunta a **ACR/Log compartidos** (`rg-espert-shared`), pero eso todavía no
+> existe (gastos y facturación también tienen los suyos). Acá se crean per-proyecto; consolidar
+> a shared es deuda futura (Ola 2 del plan de remediación).
 
 Decisiones clave frente al estándar:
 - **Compute:** Container App (Docker), no App Service. → `Dockerfile` multi-stage, runtime .NET 10 embebido.
@@ -32,7 +36,7 @@ Decisiones clave frente al estándar:
 | Key Vault | `kv-rrhh-prod` |
 | Managed Identity | `id-rrhh-prod` |
 | VNet | `vnet-rrhh-prod` |
-| ACR / Log Analytics | **compartidos** (`rg-espert-shared`) |
+| ACR / Log Analytics | `acrrrhhprod` / `log-rrhh-prod` (per-proyecto) |
 
 ## Archivos
 

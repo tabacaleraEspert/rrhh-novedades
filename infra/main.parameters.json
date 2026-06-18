@@ -5,16 +5,9 @@
     "location": { "value": "brazilsouth" },
     "project": { "value": "rrhh" },
     "env": { "value": "prod" },
-
-    "// logAnalyticsWorkspaceId": "Resource ID del Log Analytics COMPARTIDO (rg-espert-shared). Completar.",
-    "logAnalyticsWorkspaceId": { "value": "/subscriptions/<SUB_ID>/resourceGroups/rg-espert-shared/providers/Microsoft.OperationalInsights/workspaces/log-shared" },
-
-    "// acrLoginServer": "Login server del ACR COMPARTIDO. Completar (ej. acrespertshared.azurecr.io).",
-    "acrLoginServer": { "value": "<ACR_NAME>.azurecr.io" },
-
-    "// containerImage": "Imagen inicial. El primer deploy puede usar una imagen placeholder; el workflow la reemplaza.",
-    "containerImage": { "value": "<ACR_NAME>.azurecr.io/rrhh-novedades:latest" },
-
+    "acrName": { "value": "acrrrhhprod" },
+    "// containerImage": "El script lo pasa con el tag {sha}; el workflow lo reemplaza en cada deploy.",
+    "containerImage": { "value": "acrrrhhprod.azurecr.io/rrhh-novedades:latest" },
     "pgAdminUser": { "value": "rrhhadmin" }
   }
 }
