@@ -78,7 +78,7 @@
     <MudPaper Class="pa-4 mt-4" Elevation="1">
         <MudText Typo="Typo.subtitle1" Class="mb-2" Style="font-weight:600;">Usuarios del sistema</MudText>
         <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">
-            Cuentas que pueden ingresar. <b>Admin</b>: acceso total (incluida esta página). <b>RRHH</b>: dashboard y consultas.
+            Cuentas que pueden ingresar (login por <b>email + PIN</b>). <b>Admin</b>: acceso total (incluida esta página). <b>RRHH</b>: dashboard y consultas.
         </MudText>
 
         <div class="d-flex gap-2 mb-3 flex-wrap align-center">
@@ -88,7 +88,8 @@
                 <MudSelectItem T="string" Value="@Roles.RRHH">RRHH</MudSelectItem>
                 <MudSelectItem T="string" Value="@Roles.Admin">Admin</MudSelectItem>
             </MudSelect>
-            <MudTextField @bind-Value="_nuPass" Label="Contraseña" InputType="InputType.Password" Style="max-width:180px;" Margin="Margin.Dense" />
+            <MudTextField @bind-Value="_nuPass" Label="PIN (4-10 díg.)" InputType="InputType.Password"
+                          Style="max-width:140px;" Margin="Margin.Dense" />
             <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PersonAdd"
                        OnClick="CrearUsuario">Crear usuario</MudButton>
         </div>
@@ -109,7 +110,7 @@
                 </MudTd>
                 <MudTd>
                     <MudButton Size="Size.Small" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Password"
-                               OnClick="@(() => AbrirReset(context))">Resetear contraseña</MudButton>
+                               OnClick="@(() => AbrirReset(context))">Resetear PIN</MudButton>
                 </MudTd>
             </RowTemplate>
         </MudTable>
@@ -117,10 +118,10 @@
 </AuthorizeView>
 
 <MudDialog @bind-Visible="_resetVisible" Options="_dlgOpts">
-    <TitleContent><MudText Typo="Typo.h6">Resetear contraseña</MudText></TitleContent>
+    <TitleContent><MudText Typo="Typo.h6">Resetear PIN</MudText></TitleContent>
     <DialogContent>
         <MudText Typo="Typo.body2" Class="mb-2">Usuario: <b>@_resetUser?.Email</b></MudText>
-        <MudTextField @bind-Value="_resetPwd" Label="Nueva contraseña" InputType="InputType.Password" Immediate="true" />
+        <MudTextField @bind-Value="_resetPwd" Label="Nuevo PIN (4-10 dígitos)" InputType="InputType.Password" Immediate="true" />
     </DialogContent>
     <DialogActions>
         <MudButton OnClick="@(() => _resetVisible = false)">Cancelar</MudButton>
@@ -145,7 +146,10 @@
     private string _nuNombre = string.Empty;
     private string _nuEmail = string.Empty;
     private string _nuRol = Roles.RRHH;
-    private string _nuPass = string.Empty;
+    private string _nuPass = "0000";
+
+    private static bool EsPinValido(string pin) =>
+        pin.Length is >= 4 and <= 10 && pin.All(char.IsDigit);
 
     // Reset de contraseña
     private bool _resetVisible;
@@ -238,9 +242,14 @@
     private async Task CrearUsuario()
     {
         if (!await EsAdminAsync()) { Snackbar.Add("Solo un Admin puede crear usuarios.", Severity.Error); return; }
-        if (string.IsNullOrWhiteSpace(_nuEmail) || string.IsNullOrWhiteSpace(_nuPass))
+        if (string.IsNullOrWhiteSpace(_nuEmail))
         {
-            Snackbar.Add("Email y contraseña son obligatorios.", Severity.Warning);
+            Snackbar.Add("El email es obligatorio.", Severity.Warning);
+            return;
+        }
+        if (!EsPinValido(_nuPass))
+        {
+            Snackbar.Add("El PIN debe ser de 4 a 10 dígitos.", Severity.Warning);
             return;
         }
         var email = _nuEmail.Trim().ToLowerInvariant();
@@ -259,7 +268,8 @@
             Activo = true
         });
         await db.SaveChangesAsync();
-        _nuNombre = _nuEmail = _nuPass = string.Empty;
+        _nuNombre = _nuEmail = string.Empty;
+        _nuPass = "0000";
         _nuRol = Roles.RRHH;
         await Cargar();
         Snackbar.Add("Usuario creado.", Severity.Success);
@@ -294,9 +304,9 @@
     {
         if (!await EsAdminAsync()) { Snackbar.Add("Solo un Admin.", Severity.Error); return; }
         if (_resetUser is null) return;
-        if (string.IsNullOrWhiteSpace(_resetPwd) || _resetPwd.Length < 4)
+        if (!EsPinValido(_resetPwd))
         {
-            Snackbar.Add("La contraseña debe tener al menos 4 caracteres.", Severity.Warning);
+            Snackbar.Add("El PIN debe ser de 4 a 10 dígitos.", Severity.Warning);
             return;
         }
         await using var db = await DbFactory.CreateDbContextAsync();
@@ -305,6 +315,6 @@
         e.PasswordHash = BCrypt.Net.BCrypt.HashPassword(_resetPwd);
         await db.SaveChangesAsync();
         _resetVisible = false;
-        Snackbar.Add($"Contraseña actualizada para {e.Email}.", Severity.Success);
+        Snackbar.Add($"PIN actualizado para {e.Email}.", Severity.Success);
     }
 }

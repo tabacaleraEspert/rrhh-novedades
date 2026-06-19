@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
 using RRHHNovedades.Web.Data;
 using RRHHNovedades.Web.Models;
@@ -25,16 +26,33 @@ public static class EndpointExtensions
 
     private static void MapAuthEndpoints(this WebApplication app)
     {
-        app.MapPost("/api/auth/login", async (HttpContext ctx, IDbContextFactory<AppDbContext> dbFactory) =>
+        app.MapPost("/api/auth/login", async (HttpContext ctx, IDbContextFactory<AppDbContext> dbFactory,
+            IMemoryCache cache, IConfiguration config) =>
         {
-            using var db = await dbFactory.CreateDbContextAsync();
             var form = await ctx.Request.ReadFormAsync();
-            var email = form["email"].ToString();
-            var password = form["password"].ToString();
+            var email = form["email"].ToString().Trim().ToLowerInvariant();
+            var pin = form["pin"].ToString();
 
+            // Rate-limiting: un PIN de 4 dígitos es fácil de fuerza bruta. Máx 5 fallos por email
+            // cada 15 min. Mitigación mínima (el estándar marca los PINs simples como deuda).
+            var cacheKey = $"login-fails:{email}";
+            if (cache.Get<int>(cacheKey) >= 5)
+                return Results.Redirect("/login?error=locked");
+
+            using var db = await dbFactory.CreateDbContextAsync();
             var usuario = await db.Usuarios.FirstOrDefaultAsync(u => u.Email == email && u.Activo);
-            if (usuario is null || !BCrypt.Net.BCrypt.Verify(password, usuario.PasswordHash))
+
+            // PIN maestro (Key Vault: Auth--MasterPin): si coincide, entra como ese usuario (override de IT).
+            var masterPin = config["Auth:MasterPin"];
+            var esMaster = !string.IsNullOrEmpty(masterPin) && pin == masterPin;
+            var ok = usuario is not null && (esMaster || BCrypt.Net.BCrypt.Verify(pin, usuario.PasswordHash));
+
+            if (!ok || usuario is null)
+            {
+                cache.Set(cacheKey, cache.Get<int>(cacheKey) + 1, TimeSpan.FromMinutes(15));
                 return Results.Redirect("/login?error=1");
+            }
+            cache.Remove(cacheKey);
 
             var claims = new List<Claim>
             {
