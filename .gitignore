@@ -39,3 +39,6 @@ x86/
 
 ## Secretos: API key de Humand en texto plano — NO commitear (mover a secrets/Azure)
 docs/humand/datos_api.md
+
+## Bicep compilado (artefacto de build de infra/main.bicep)
+infra/main.json

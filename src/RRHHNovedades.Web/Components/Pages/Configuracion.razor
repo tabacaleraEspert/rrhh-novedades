@@ -4,6 +4,7 @@
 @inject IDbContextFactory<AppDbContext> DbFactory
 @inject IOptions<AsistenciaOptions> AsistenciaOpt
 @inject ISnackbar Snackbar
+@using Microsoft.AspNetCore.Components.Authorization
 @using Microsoft.Extensions.Options
 @using RRHHNovedades.Web.Data
 @using RRHHNovedades.Web.Models
@@ -51,12 +52,16 @@
     <MudItem xs="12" md="5">
         <MudPaper Class="pa-4" Elevation="1">
             <MudText Typo="Typo.subtitle1" Class="mb-2" Style="font-weight:600;">Horarios de los partes</MudText>
-            <MudText Typo="Typo.body2" Color="Color.Secondary">
-                Parametrizables en <code>appsettings</code> (sección <code>Asistencia</code>):
+            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">
+                Hora a la que el bot envía cada parte (hora Argentina). Se aplican sin reiniciar.
             </MudText>
+            <div class="d-flex gap-2 flex-wrap align-center mb-2">
+                <MudTextField @bind-Value="_horaManana" Label="Parte mañana (HH:mm)" Style="max-width:160px;" Margin="Margin.Dense" />
+                <MudTextField @bind-Value="_horaTarde" Label="Parte tarde (HH:mm)" Style="max-width:160px;" Margin="Margin.Dense" />
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Save"
+                           OnClick="GuardarHorarios">Guardar</MudButton>
+            </div>
             <MudList T="string" Dense="true">
-                <MudListItem T="string" Icon="@Icons.Material.Filled.WbSunny">Parte mañana: <b>@_opt.HoraParteManana</b></MudListItem>
-                <MudListItem T="string" Icon="@Icons.Material.Filled.WbTwilight">Parte tarde: <b>@_opt.HoraParteTarde</b></MudListItem>
                 <MudListItem T="string" Icon="@Icons.Material.Filled.Sync">
                     Auto-sync extra: <b>@(_opt.AutoSyncHoras is { Count: > 0 } h ? string.Join(" y ", h) : "—")</b>
                 </MudListItem>
@@ -65,18 +70,92 @@
             <MudText Typo="Typo.caption" Color="Color.Secondary">
                 Los datos se actualizan solos antes de cada parte y en los horarios de auto-sync.
             </MudText>
-            <MudText Typo="Typo.caption" Color="Color.Secondary">
-                (La edición de horarios desde la UI queda para una próxima iteración.)
-            </MudText>
         </MudPaper>
     </MudItem>
 </MudGrid>
 
+<AuthorizeView Roles="Admin" Context="auth">
+    <MudPaper Class="pa-4 mt-4" Elevation="1">
+        <MudText Typo="Typo.subtitle1" Class="mb-2" Style="font-weight:600;">Usuarios del sistema</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">
+            Cuentas que pueden ingresar (login por <b>email + PIN</b>). <b>Admin</b>: acceso total (incluida esta página). <b>RRHH</b>: dashboard y consultas.
+        </MudText>
+
+        <div class="d-flex gap-2 mb-3 flex-wrap align-center">
+            <MudTextField @bind-Value="_nuNombre" Label="Nombre" Style="max-width:180px;" Margin="Margin.Dense" />
+            <MudTextField @bind-Value="_nuEmail" Label="Email" Style="max-width:220px;" Margin="Margin.Dense" />
+            <MudSelect T="string" @bind-Value="_nuRol" Label="Rol" Style="max-width:120px;" Margin="Margin.Dense" Dense="true">
+                <MudSelectItem T="string" Value="@Roles.RRHH">RRHH</MudSelectItem>
+                <MudSelectItem T="string" Value="@Roles.Admin">Admin</MudSelectItem>
+            </MudSelect>
+            <MudTextField @bind-Value="_nuPass" Label="PIN (4-10 díg.)" InputType="InputType.Password"
+                          Style="max-width:140px;" Margin="Margin.Dense" />
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PersonAdd"
+                       OnClick="CrearUsuario">Crear usuario</MudButton>
+        </div>
+
+        <MudTable Items="_usuarios" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm">
+            <NoRecordsContent><MudText>Sin usuarios.</MudText></NoRecordsContent>
+            <HeaderContent>
+                <MudTh>Nombre</MudTh><MudTh>Email</MudTh><MudTh>Rol</MudTh><MudTh>Activo</MudTh><MudTh></MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Nombre">@context.Nombre</MudTd>
+                <MudTd DataLabel="Email">@context.Email</MudTd>
+                <MudTd DataLabel="Rol">
+                    <MudChip T="string" Size="Size.Small" Color="@(context.Rol == Roles.Admin ? Color.Primary : Color.Default)">@context.Rol</MudChip>
+                </MudTd>
+                <MudTd DataLabel="Activo">
+                    <MudSwitch T="bool" Value="context.Activo" ValueChanged="@(v => ToggleUsuarioActivo(context, v))" Color="Color.Success" />
+                </MudTd>
+                <MudTd>
+                    <MudButton Size="Size.Small" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Password"
+                               OnClick="@(() => AbrirReset(context))">Resetear PIN</MudButton>
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+    </MudPaper>
+</AuthorizeView>
+
+<MudDialog @bind-Visible="_resetVisible" Options="_dlgOpts">
+    <TitleContent><MudText Typo="Typo.h6">Resetear PIN</MudText></TitleContent>
+    <DialogContent>
+        <MudText Typo="Typo.body2" Class="mb-2">Usuario: <b>@_resetUser?.Email</b></MudText>
+        <MudTextField @bind-Value="_resetPwd" Label="Nuevo PIN (4-10 dígitos)" InputType="InputType.Password" Immediate="true" />
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => _resetVisible = false)">Cancelar</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="ConfirmarReset">Guardar</MudButton>
+    </DialogActions>
+</MudDialog>
+
 @code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
     private List<DestinatarioParte> _destinatarios = [];
+    private List<Usuario> _usuarios = [];
     private AsistenciaOptions _opt = new();
     private string _nuevoNombre = string.Empty;
     private string _nuevoTel = string.Empty;
+
+    // Horarios
+    private string _horaManana = "07:00";
+    private string _horaTarde = "14:00";
+
+    // Alta de usuario
+    private string _nuNombre = string.Empty;
+    private string _nuEmail = string.Empty;
+    private string _nuRol = Roles.RRHH;
+    private string _nuPass = "0000";
+
+    private static bool EsPinValido(string pin) =>
+        pin.Length is >= 4 and <= 10 && pin.All(char.IsDigit);
+
+    // Reset de contraseña
+    private bool _resetVisible;
+    private Usuario? _resetUser;
+    private string _resetPwd = string.Empty;
+    private readonly DialogOptions _dlgOpts = new() { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true, CloseOnEscapeKey = true };
 
     protected override async Task OnInitializedAsync()
     {
@@ -88,8 +167,12 @@
     {
         await using var db = await DbFactory.CreateDbContextAsync();
         _destinatarios = await db.Destinatarios.OrderBy(d => d.Nombre).ToListAsync();
+        _usuarios = await db.Usuarios.OrderBy(u => u.Nombre).ToListAsync();
+        var cfg = await db.ConfiguracionParte.FirstOrDefaultAsync();
+        if (cfg is not null) { _horaManana = cfg.HoraParteManana; _horaTarde = cfg.HoraParteTarde; }
     }
 
+    // ---- Destinatarios ----
     private async Task Agregar()
     {
         if (string.IsNullOrWhiteSpace(_nuevoTel))
@@ -129,5 +212,109 @@
         await db.SaveChangesAsync();
         await Cargar();
         Snackbar.Add("Destinatario eliminado.", Severity.Info);
+    }
+
+    // ---- Horarios ----
+    private async Task GuardarHorarios()
+    {
+        if (!TimeOnly.TryParse(_horaManana, out _) || !TimeOnly.TryParse(_horaTarde, out _))
+        {
+            Snackbar.Add("Horario inválido. Usá formato HH:mm (ej. 07:00).", Severity.Warning);
+            return;
+        }
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var cfg = await db.ConfiguracionParte.FirstOrDefaultAsync();
+        if (cfg is null) { cfg = new ConfiguracionParte(); db.ConfiguracionParte.Add(cfg); }
+        cfg.HoraParteManana = _horaManana.Trim();
+        cfg.HoraParteTarde = _horaTarde.Trim();
+        await db.SaveChangesAsync();
+        Snackbar.Add($"Horarios guardados: mañana {cfg.HoraParteManana}, tarde {cfg.HoraParteTarde}.", Severity.Success);
+    }
+
+    // ---- Usuarios ----
+    private async Task<bool> EsAdminAsync()
+    {
+        if (AuthState is null) return false;
+        var state = await AuthState;
+        return state.User.IsInRole(Roles.Admin);
+    }
+
+    private async Task CrearUsuario()
+    {
+        if (!await EsAdminAsync()) { Snackbar.Add("Solo un Admin puede crear usuarios.", Severity.Error); return; }
+        if (string.IsNullOrWhiteSpace(_nuEmail))
+        {
+            Snackbar.Add("El email es obligatorio.", Severity.Warning);
+            return;
+        }
+        if (!EsPinValido(_nuPass))
+        {
+            Snackbar.Add("El PIN debe ser de 4 a 10 dígitos.", Severity.Warning);
+            return;
+        }
+        var email = _nuEmail.Trim().ToLowerInvariant();
+        await using var db = await DbFactory.CreateDbContextAsync();
+        if (await db.Usuarios.AnyAsync(u => u.Email == email))
+        {
+            Snackbar.Add("Ya existe un usuario con ese email.", Severity.Warning);
+            return;
+        }
+        db.Usuarios.Add(new Usuario
+        {
+            Nombre = string.IsNullOrWhiteSpace(_nuNombre) ? email : _nuNombre.Trim(),
+            Email = email,
+            Rol = _nuRol,
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword(_nuPass),
+            Activo = true
+        });
+        await db.SaveChangesAsync();
+        _nuNombre = _nuEmail = string.Empty;
+        _nuPass = "0000";
+        _nuRol = Roles.RRHH;
+        await Cargar();
+        Snackbar.Add("Usuario creado.", Severity.Success);
+    }
+
+    private async Task ToggleUsuarioActivo(Usuario u, bool valor)
+    {
+        if (!await EsAdminAsync()) { Snackbar.Add("Solo un Admin.", Severity.Error); return; }
+        await using var db = await DbFactory.CreateDbContextAsync();
+        // No permitir desactivar el último admin activo.
+        if (!valor && u.Rol == Roles.Admin &&
+            await db.Usuarios.CountAsync(x => x.Rol == Roles.Admin && x.Activo) <= 1)
+        {
+            Snackbar.Add("No podés desactivar el último Admin activo.", Severity.Warning);
+            return;
+        }
+        var e = await db.Usuarios.FindAsync(u.Id);
+        if (e is null) return;
+        e.Activo = valor;
+        await db.SaveChangesAsync();
+        u.Activo = valor;
+    }
+
+    private void AbrirReset(Usuario u)
+    {
+        _resetUser = u;
+        _resetPwd = string.Empty;
+        _resetVisible = true;
+    }
+
+    private async Task ConfirmarReset()
+    {
+        if (!await EsAdminAsync()) { Snackbar.Add("Solo un Admin.", Severity.Error); return; }
+        if (_resetUser is null) return;
+        if (!EsPinValido(_resetPwd))
+        {
+            Snackbar.Add("El PIN debe ser de 4 a 10 dígitos.", Severity.Warning);
+            return;
+        }
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var e = await db.Usuarios.FindAsync(_resetUser.Id);
+        if (e is null) return;
+        e.PasswordHash = BCrypt.Net.BCrypt.HashPassword(_resetPwd);
+        await db.SaveChangesAsync();
+        _resetVisible = false;
+        Snackbar.Add($"PIN actualizado para {e.Email}.", Severity.Success);
     }
 }

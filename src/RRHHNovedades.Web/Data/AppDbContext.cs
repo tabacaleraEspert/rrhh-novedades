@@ -10,6 +10,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<NovedadDiaria> Novedades => Set<NovedadDiaria>();
     public DbSet<DestinatarioParte> Destinatarios => Set<DestinatarioParte>();
     public DbSet<EnvioParte> EnviosParte => Set<EnvioParte>();
+    public DbSet<ConfiguracionParte> ConfiguracionParte => Set<ConfiguracionParte>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -49,6 +50,12 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.Property(x => x.Telefono).HasMaxLength(40);
             e.Property(x => x.MessageSid).HasMaxLength(64);
             e.Property(x => x.Error).HasMaxLength(500);
+        });
+
+        modelBuilder.Entity<ConfiguracionParte>(e =>
+        {
+            e.Property(x => x.HoraParteManana).HasMaxLength(5);
+            e.Property(x => x.HoraParteTarde).HasMaxLength(5);
         });
     }
 }

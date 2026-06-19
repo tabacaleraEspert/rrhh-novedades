@@ -10,26 +10,31 @@
             <img src="/img/isologotipo-negativo.svg" alt="ESPERT" />
         </div>
         <h1>Novedades RRHH</h1>
-        @if (_error)
+        @if (_mensajeError is not null)
         {
-            <p class="login-error">Credenciales inválidas</p>
+            <p class="login-error">@_mensajeError</p>
         }
         <form method="post" action="/api/auth/login">
             <label for="email">Email</label>
             <input type="email" id="email" name="email" required autofocus placeholder="usuario@tabacaleraespert.com" />
-            <label for="password">Contraseña</label>
-            <input type="password" id="password" name="password" required placeholder="••••••••" />
+            <label for="pin">PIN</label>
+            <input type="password" id="pin" name="pin" required inputmode="numeric" pattern="[0-9]*"
+                   maxlength="10" placeholder="••••" autocomplete="off" />
             <button type="submit">Ingresar</button>
         </form>
     </div>
 </div>
 
 @code {
-    private bool _error;
+    private string? _mensajeError;
 
     protected override void OnInitialized()
     {
         var uri = Nav.ToAbsoluteUri(Nav.Uri);
-        _error = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(uri.Query).ContainsKey("error");
+        var q = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(uri.Query);
+        if (q.TryGetValue("error", out var e))
+            _mensajeError = e == "locked"
+                ? "Demasiados intentos. Esperá unos minutos e intentá de nuevo."
+                : "Email o PIN inválido.";
     }
 }

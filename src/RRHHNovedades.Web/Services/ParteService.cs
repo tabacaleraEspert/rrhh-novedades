@@ -21,6 +21,12 @@ public interface IParteService
 {
     Task<ParteContenido> ArmarParteAsync(DateOnly fecha, Turno turno, CancellationToken ct = default);
     Task<ParteEnvioResultado> EnviarParteAsync(DateOnly fecha, Turno turno, CancellationToken ct = default);
+
+    /// <summary>
+    /// ¿Ya se envió con éxito el parte de este (fecha, turno)? Se usa para NO reenviar después de un
+    /// reinicio del proceso (cada deploy/crash reinicia el contenedor): el estado vive en la DB, no en memoria.
+    /// </summary>
+    Task<bool> YaSeEnvioAsync(DateOnly fecha, Turno turno, CancellationToken ct = default);
 }
 
 /// <summary>
@@ -110,6 +116,12 @@ public class ParteService(
         await db.SaveChangesAsync(ct);
         logger.LogInformation("Parte {Turno} {Fecha} enviado: {Ok} ok, {Fail} fallidos", turno, fecha, ok, fail);
         return new ParteEnvioResultado(ok, fail, contenido);
+    }
+
+    public async Task<bool> YaSeEnvioAsync(DateOnly fecha, Turno turno, CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        return await db.EnviosParte.AnyAsync(e => e.Fecha == fecha && e.Turno == turno && e.Exito, ct);
     }
 
     private static List<string> Nombres(IEnumerable<NovedadDiaria> ns, EstadoJornada estado) =>

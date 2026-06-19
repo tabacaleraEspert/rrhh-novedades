@@ -11,9 +11,9 @@ public static class ServiceCollectionExtensions
 {
     public static IServiceCollection AddAppServices(this IServiceCollection services, IConfiguration config, IWebHostEnvironment env)
     {
-        // Base de datos
+        // Base de datos (PostgreSQL — estándar Espert para apps transaccionales)
         services.AddDbContextFactory<AppDbContext>(options =>
-            options.UseSqlServer(config.GetConnectionString("Default")));
+            options.UseNpgsql(config.GetConnectionString("Default")));
 
         // Opciones
         services.Configure<AsistenciaOptions>(config.GetSection(AsistenciaOptions.SectionName));
@@ -28,6 +28,8 @@ public static class ServiceCollectionExtensions
             services.AddHttpClient<IHumandService, HumandService>();
 
         // Servicios de aplicación
+        // Reloj único en hora Argentina: toda comparación/visualización de fecha-hora pasa por acá.
+        services.AddSingleton<IReloj, RelojArgentino>();
         services.AddSingleton<ITwilioService, TwilioService>();
         services.AddScoped<IIngestaService, IngestaService>();
         services.AddScoped<IParteService, ParteService>();

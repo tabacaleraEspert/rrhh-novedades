@@ -8,16 +8,20 @@ public static class SeedData
     public static async Task InitializeAsync(AppDbContext db)
     {
         // Usuarios iniciales (idempotente por email: agrega los que falten sin pisar los existentes).
-        // Cambiar las contraseñas en producción.
-        await SeedUsuarioAsync(db, "Administrador", "desarrollador1@tabacaleraespert.com", "espert", Roles.Admin);
+        // El login es por PIN; el PIN inicial es 0000. Cambiarlo en producción desde Configuración.
+        await SeedUsuarioAsync(db, "Administrador", "desarrollador1@tabacaleraespert.com", "0000", Roles.Admin);
         // Equipo de RRHH: ve el dashboard y las consultas, sin acceso a Configuración.
-        await SeedUsuarioAsync(db, "RRHH", "rrhh@tabacaleraespert.com", "espert", Roles.RRHH);
+        await SeedUsuarioAsync(db, "RRHH", "rrhh@tabacaleraespert.com", "0000", Roles.RRHH);
 
         if (!db.Destinatarios.Any())
         {
             // Listado inicial de RRHH (placeholder — completar/ajustar desde Configuración).
             db.Destinatarios.Add(new DestinatarioParte { Nombre = "RRHH (ejemplo)", Telefono = "+5491100000000", Activo = false });
         }
+
+        // Configuración del bot (fila única). Horarios editables desde la UI.
+        if (!await db.ConfiguracionParte.AnyAsync())
+            db.ConfiguracionParte.Add(new ConfiguracionParte { HoraParteManana = "07:00", HoraParteTarde = "14:00" });
 
         await db.SaveChangesAsync();
     }
