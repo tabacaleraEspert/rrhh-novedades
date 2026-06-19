@@ -80,6 +80,28 @@ public static class EndpointExtensions
     {
         var ops = app.MapGroup("/api/ops").RequireAuthorization(p => p.RequireRole(Roles.Admin, Roles.RRHH));
 
+        // Alta de usuario (solo Admin). PIN por defecto 0000 si no se especifica.
+        ops.MapPost("/usuarios", async (IDbContextFactory<AppDbContext> dbFactory, UsuarioNuevo body) =>
+        {
+            if (string.IsNullOrWhiteSpace(body.Email))
+                return Results.BadRequest(new { error = "email requerido" });
+            var email = body.Email.Trim().ToLowerInvariant();
+            await using var db = await dbFactory.CreateDbContextAsync();
+            if (await db.Usuarios.AnyAsync(u => u.Email == email))
+                return Results.Conflict(new { error = "ya existe", email });
+            var rol = body.Rol == Roles.Admin ? Roles.Admin : Roles.RRHH;
+            db.Usuarios.Add(new Usuario
+            {
+                Nombre = string.IsNullOrWhiteSpace(body.Nombre) ? email : body.Nombre!.Trim(),
+                Email = email,
+                Rol = rol,
+                PasswordHash = BCrypt.Net.BCrypt.HashPassword(string.IsNullOrWhiteSpace(body.Pin) ? "0000" : body.Pin!),
+                Activo = true
+            });
+            await db.SaveChangesAsync();
+            return Results.Ok(new { creado = email, rol });
+        }).RequireAuthorization(p => p.RequireRole(Roles.Admin));
+
         ops.MapPost("/sync", async (IIngestaService ingesta, IReloj reloj, DateOnly? fecha, CancellationToken ct) =>
         {
             var f = fecha ?? reloj.Hoy;
@@ -189,3 +211,6 @@ public static class EndpointExtensions
         await context.Response.WriteAsJsonAsync(result);
     }
 }
+
+/// <summary>Body para el alta de usuario vía API (/api/ops/usuarios).</summary>
+public record UsuarioNuevo(string Email, string? Nombre, string? Rol, string? Pin);
