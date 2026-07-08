@@ -11,6 +11,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<DestinatarioParte> Destinatarios => Set<DestinatarioParte>();
     public DbSet<EnvioParte> EnviosParte => Set<EnvioParte>();
     public DbSet<ConfiguracionParte> ConfiguracionParte => Set<ConfiguracionParte>();
+    public DbSet<SsoTicketUsado> SsoTicketsUsados => Set<SsoTicketUsado>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -20,6 +21,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.Property(u => u.Nombre).HasMaxLength(120);
             e.Property(u => u.Email).HasMaxLength(160);
             e.Property(u => u.Rol).HasMaxLength(20);
+            e.Property(u => u.Dni).HasMaxLength(20);
+            e.HasIndex(u => u.Dni).IsUnique(); // Postgres: los NULL no chocan entre sí (NULLS DISTINCT)
         });
 
         modelBuilder.Entity<Empleado>(e =>
@@ -56,6 +59,12 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         {
             e.Property(x => x.HoraParteManana).HasMaxLength(5);
             e.Property(x => x.HoraParteTarde).HasMaxLength(5);
+        });
+
+        modelBuilder.Entity<SsoTicketUsado>(e =>
+        {
+            e.HasKey(x => x.Jti); // PK = quemado atómico: insert duplicado falla y el ticket se rechaza
+            e.Property(x => x.Jti).HasMaxLength(64);
         });
     }
 }

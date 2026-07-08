@@ -79,6 +79,38 @@ Al levantar, la app crea las tablas (`EnsureCreated`) y siembra los 2 usuarios (
 3. Probar **Sincronizar hoy** (~190 empleados desde Humand) y un **envío manual** de parte.
 4. El scheduler envía solo a las **07:00** y **14:00** (hora Argentina).
 
+## SSO desde el Command Center
+
+Autologin por ticket JWT de un solo uso: el Command Center redirige el browser a
+`https://<app>/sso#ticket=<JWT>` (HS256, claims `dni`/`aud="rrhh-novedades"`/`iat`/`exp=iat+60`/`jti`).
+La app valida (firma, aud, exp con 10s de skew, vida ≤ 300s), quema el `jti` en la tabla
+`SsoTicketsUsados` (un solo uso, incluso si el login falla) y abre la sesión cookie normal del
+usuario cuyo `Dni` coincida (se carga en Configuración → Usuarios). Todo fallo → 401 genérico
+y redirect a `/login?error=sso`.
+
+**Secret:** `Sso--SharedSecret` en Key Vault (mismo valor que en el Command Center, ≥ 32 chars
+aleatorios; se pasa por canal seguro, nunca por chat). Vacío = SSO deshabilitado. En dev va en
+`appsettings.secrets.local.json` (`Sso:SharedSecret`).
+
+**SQL manual en prod — correr ANTES de deployar la imagen** (`EnsureCreated` no altera una DB
+existente, y con `Dni` en el modelo cualquier SELECT de `Usuarios` falla sin la columna):
+
+```sql
+-- 1) Columna DNI (nullable; único cuando no es NULL — en Postgres los NULL no chocan)
+ALTER TABLE "Usuarios" ADD COLUMN "Dni" character varying(20);
+CREATE UNIQUE INDEX "IX_Usuarios_Dni" ON "Usuarios" ("Dni");
+
+-- 2) Tabla de jti consumidos (un solo uso)
+CREATE TABLE "SsoTicketsUsados" (
+    "Jti" character varying(64) NOT NULL,
+    "ExpiraUtc" timestamp with time zone NOT NULL,
+    CONSTRAINT "PK_SsoTicketsUsados" PRIMARY KEY ("Jti")
+);
+```
+
+Post-deploy: cargar el DNI de cada usuario que vaya a entrar por SSO (Configuración → Usuarios,
+botón de editar DNI) y coordinar con el equipo del Command Center la prueba end-to-end.
+
 ## Checklist Go-Live
 
 Correr `espert-azure-standards/GO-LIVE-CHECKLIST.md`. Estado de esta app:

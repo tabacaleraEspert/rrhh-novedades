@@ -145,7 +145,10 @@
             <MudText Typo="Typo.body2" Class="mb-3">Sí: cambiá la fecha en el Dashboard. El historial se guarda día por día.</MudText>
 
             <MudText Typo="Typo.subtitle2">"¿Quién puede entrar al sistema?"</MudText>
-            <MudText Typo="Typo.body2">Usuarios con cuenta. Los roles <b>RRHH</b> y <b>Admin</b> tienen acceso completo: dashboard, bot de novedades y Configuración. Las altas de usuarios las gestiona Sistemas.</MudText>
+            <MudText Typo="Typo.body2" Class="mb-3">Usuarios con cuenta. Los roles <b>RRHH</b> y <b>Admin</b> tienen acceso completo: dashboard, bot de novedades y Configuración. Las altas de usuarios las gestiona Sistemas.</MudText>
+
+            <MudText Typo="Typo.subtitle2">"¿Puedo entrar desde el Command Center sin poner el PIN?"</MudText>
+            <MudText Typo="Typo.body2">Sí. Si entrás desde el <b>Command Center de Espert</b>, el sistema te reconoce y te abre la sesión solo — sin email ni PIN. Para que funcione, un Admin tiene que tener cargado tu <b>DNI</b> en Configuración → Usuarios del sistema. Si aparece "No pudimos validar el acceso", ingresá con tu email y PIN como siempre y avisale a Sistemas.</MudText>
         </ChildContent>
     </MudExpansionPanel>
 
@@ -153,5 +156,5 @@
 
 @code {
     // Actualizar esta fecha cada vez que se modifique el manual (ver CLAUDE.md → "Manual de uso").
-    private const string UltimaActualizacion = "18/06/2026";
+    private const string UltimaActualizacion = "08/07/2026";
 }

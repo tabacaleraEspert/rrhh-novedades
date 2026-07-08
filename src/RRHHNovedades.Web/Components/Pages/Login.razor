@@ -35,6 +35,8 @@
         if (q.TryGetValue("error", out var e))
             _mensajeError = e == "locked"
                 ? "Demasiados intentos. Esperá unos minutos e intentá de nuevo."
-                : "Email o PIN inválido.";
+                : e == "sso"
+                    ? "No pudimos validar el acceso desde el Command Center. Ingresá con tu email y PIN."
+                    : "Email o PIN inválido.";
     }
 }

@@ -43,9 +43,11 @@ fi
 echo "[2/5] Levantando app (mock Humand, Twilio off, DB Smoke, scheduler neutralizado)..."
 # DB efímera: se recrea en cada corrida para que el resultado sea siempre el mismo.
 sqlcmd -S "(localdb)\\mssqllocaldb" -Q "IF DB_ID('RRHHNovedades_Smoke') IS NOT NULL BEGIN ALTER DATABASE [RRHHNovedades_Smoke] SET SINGLE_USER WITH ROLLBACK IMMEDIATE; DROP DATABASE [RRHHNovedades_Smoke]; END" >/dev/null 2>&1
+SSO_SECRET="secreto-sso-smoke-0123456789abcdef-0123456789" # solo para el smoke (32+ chars)
 ASPNETCORE_ENVIRONMENT=Development \
 Humand__UseMock=true \
 Twilio__AccountSid= Twilio__AuthToken= Twilio__ContentSidParte= \
+Sso__SharedSecret="$SSO_SECRET" \
 ConnectionStrings__Default="Server=(localdb)\\mssqllocaldb;Database=RRHHNovedades_Smoke;Trusted_Connection=True;MultipleActiveResultSets=true" \
 Asistencia__HoraParteManana=23:59 Asistencia__HoraParteTarde=23:59 \
 Asistencia__AutoSyncHoras__0=23:59 \
@@ -62,7 +64,7 @@ verde "  OK   app arriba ($BASE)"
 
 echo "[3/5] Login + sincronización mock..."
 login=$(curl -s -c "$COOKIES" -o /dev/null -w "%{http_code}" \
-    -d "email=desarrollador1@tabacaleraespert.com&password=espert" "$BASE/api/auth/login")
+    -d "email=desarrollador1@tabacaleraespert.com&pin=0000" "$BASE/api/auth/login")
 [ "$login" = "302" ] && verde "  OK   login" || { rojo "  FAIL login (HTTP $login)"; FALLOS=$((FALLOS+1)); }
 
 sync=$(curl -s -b "$COOKIES" -X POST "$BASE/api/ops/sync")
@@ -86,6 +88,27 @@ check "parte: pie fijo del template"   "$parte" "Reporte automático de asistenc
 
 parteT=$(curl -s -b "$COOKIES" "$BASE/api/ops/parte/preview?turno=Tarde")
 check "parte tarde: tardanza de López" "$parteT" "Tardanzas: 1 (López, Carla)"
+
+echo "[4b/5] SSO Command Center (ticket JWT de un solo uso)..."
+b64url() { openssl base64 -A | tr '+/' '-_' | tr -d '='; }
+mk_ticket() { # mk_ticket <dni> — emite un ticket como lo haría el Command Center
+    local iat exp h p s
+    iat=$(date +%s); exp=$((iat + 60))
+    h=$(printf '{"alg":"HS256","typ":"JWT"}' | b64url)
+    p=$(printf '{"dni":"%s","aud":"rrhh-novedades","iat":%d,"exp":%d,"jti":"smoke-%s%s"}' "$1" "$iat" "$exp" "$RANDOM" "$RANDOM" | b64url)
+    s=$(printf '%s.%s' "$h" "$p" | openssl dgst -sha256 -hmac "$SSO_SECRET" -binary | b64url)
+    printf '%s.%s.%s' "$h" "$p" "$s"
+}
+curl -s -b "$COOKIES" -X POST "$BASE/api/ops/usuarios" -H "Content-Type: application/json" \
+    -d '{"email":"sso-smoke@tabacaleraespert.com","nombre":"SSO Smoke","rol":"RRHH","pin":"1234","dni":"30111222"}' >/dev/null
+landing=$(curl -s "$BASE/sso")
+check "landing /sso" "$landing" "Validando acceso"
+TICKET=$(mk_ticket "30111222")
+ssoc=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$BASE/api/auth/sso" -H "Content-Type: application/json" -d "{\"ticket\":\"$TICKET\"}")
+[ "$ssoc" = "200" ] && verde "  OK   ticket válido → 200" || { rojo "  FAIL ticket válido (HTTP $ssoc)"; FALLOS=$((FALLOS+1)); }
+# Replay del MISMO ticket: 401 exacto (un 401 sin body era re-ejecutado por StatusCodePages y salía 400).
+replayc=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$BASE/api/auth/sso" -H "Content-Type: application/json" -d "{\"ticket\":\"$TICKET\"}")
+[ "$replayc" = "401" ] && verde "  OK   replay del ticket → 401" || { rojo "  FAIL replay (HTTP $replayc, esperaba 401)"; FALLOS=$((FALLOS+1)); }
 
 echo "[5/5] Páginas clave responden..."
 for ruta in "/" "/ayuda" "/empleados" "/mensajes"; do

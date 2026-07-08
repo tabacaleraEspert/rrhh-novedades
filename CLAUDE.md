@@ -76,6 +76,10 @@ WhatsApp a los `DestinatarioParte` activos. Disparo manual: página **Bot de nov
 - Cookie-based, 12h expiry, HttpOnly
 - Roles: Admin, Operador
 - Endpoints: POST /api/auth/login, GET /api/auth/logout
+- SSO desde el Command Center: `GET /sso#ticket=<JWT>` (landing estática) → `POST /api/auth/sso`.
+  Ticket HS256 de un solo uso (claims dni/aud/iat/exp/jti; jti se quema en `SsoTicketsUsados`),
+  secret en `Sso:SharedSecret` (Key Vault `Sso--SharedSecret`), lookup por `Usuario.Dni`.
+  Núcleo testeable en `Services/SsoTicketService.cs`; detalles de deploy en `docs/DEPLOY-AZURE.md` §SSO.
 - Seed: desarrollador1@tabacaleraespert.com (Admin), pass `espert` — cambiar en prod
 
 ## Integraciones

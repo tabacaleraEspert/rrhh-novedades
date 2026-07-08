@@ -73,7 +73,73 @@ public static class EndpointExtensions
             await ctx.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
             return Results.Redirect("/login");
         });
+
+        // Autologin (SSO) desde el Command Center: ticket JWT de un solo uso (ver SsoTicketService).
+        // Todo fallo responde 401 genérico, sin distinguir causa. El 401 lleva body: si fuera vacío,
+        // UseStatusCodePagesWithReExecute re-ejecutaría el POST contra Blazor y lo convertiría en 400.
+        var noAutorizado = () => Results.Json(new { ok = false }, statusCode: StatusCodes.Status401Unauthorized);
+        app.MapPost("/api/auth/sso", async (HttpContext ctx, ISsoTicketService sso, IMemoryCache cache,
+            SsoLoginRequest body, CancellationToken ct) =>
+        {
+            // Rate-limiting por IP (la real, vía ForwardedHeaders): frena fuerza bruta de tickets.
+            var ip = ctx.Connection.RemoteIpAddress?.ToString() ?? "?";
+            var cacheKey = $"sso-fails:{ip}";
+            if (cache.Get<int>(cacheKey) >= 10)
+                return noAutorizado();
+
+            var usuario = await sso.ValidarYConsumirAsync(body?.Ticket ?? string.Empty, ct);
+            if (usuario is null)
+            {
+                cache.Set(cacheKey, cache.Get<int>(cacheKey) + 1, TimeSpan.FromMinutes(15));
+                return noAutorizado();
+            }
+            cache.Remove(cacheKey);
+
+            // Misma sesión que el login normal (cookie 12h con los mismos claims).
+            var claims = new List<Claim>
+            {
+                new(ClaimTypes.Name, usuario.Nombre),
+                new(ClaimTypes.Email, usuario.Email),
+                new(ClaimTypes.Role, usuario.Rol),
+                new("UserId", usuario.Id.ToString())
+            };
+            var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
+            await ctx.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(identity));
+
+            return Results.Ok(new { ok = true });
+        });
+
+        // Landing del SSO: el Command Center manda el browser a /sso#ticket=<JWT>. El ticket viaja
+        // en el fragment (nunca llega al servidor ni a logs); lo lee este JS y lo POSTea al endpoint.
+        // HTML estático a propósito: el rendermode global es InteractiveServer y acá no hace falta circuito.
+        app.MapGet("/sso", () => Results.Content(SsoLandingHtml, "text/html; charset=utf-8"));
     }
+
+    private const string SsoLandingHtml = """
+        <!DOCTYPE html>
+        <html lang="es">
+        <head><meta charset="utf-8"><title>Ingresando…</title></head>
+        <body style="font-family:sans-serif;display:flex;justify-content:center;margin-top:4rem;">
+        <p>Validando acceso…</p>
+        <script>
+        (async () => {
+          const fail = () => location.replace('/login?error=sso');
+          try {
+            const ticket = new URLSearchParams(location.hash.slice(1)).get('ticket');
+            history.replaceState(null, '', '/sso'); // saca el ticket de la barra y del historial
+            if (!ticket) return fail();
+            const r = await fetch('/api/auth/sso', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ ticket })
+            });
+            r.ok ? location.replace('/') : fail();
+          } catch { fail(); }
+        })();
+        </script>
+        </body>
+        </html>
+        """;
 
     /// <summary>Endpoints operativos para disparar manualmente la sincronización y el envío del parte (Admin y RRHH).</summary>
     private static void MapOpsEndpoints(this WebApplication app)
@@ -89,6 +155,11 @@ public static class EndpointExtensions
             await using var db = await dbFactory.CreateDbContextAsync();
             if (await db.Usuarios.AnyAsync(u => u.Email == email))
                 return Results.Conflict(new { error = "ya existe", email });
+            // DNI (opcional, para SSO): solo dígitos, único.
+            var dni = string.IsNullOrWhiteSpace(body.Dni) ? null : new string(body.Dni!.Where(char.IsDigit).ToArray());
+            if (dni is { Length: 0 }) dni = null;
+            if (dni is not null && await db.Usuarios.AnyAsync(u => u.Dni == dni))
+                return Results.Conflict(new { error = "dni ya existe", dni });
             var rol = body.Rol == Roles.Admin ? Roles.Admin : Roles.RRHH;
             db.Usuarios.Add(new Usuario
             {
@@ -96,7 +167,8 @@ public static class EndpointExtensions
                 Email = email,
                 Rol = rol,
                 PasswordHash = BCrypt.Net.BCrypt.HashPassword(string.IsNullOrWhiteSpace(body.Pin) ? "0000" : body.Pin!),
-                Activo = true
+                Activo = true,
+                Dni = dni
             });
             await db.SaveChangesAsync();
             return Results.Ok(new { creado = email, rol });
@@ -213,4 +285,7 @@ public static class EndpointExtensions
 }
 
 /// <summary>Body para el alta de usuario vía API (/api/ops/usuarios).</summary>
-public record UsuarioNuevo(string Email, string? Nombre, string? Rol, string? Pin);
+public record UsuarioNuevo(string Email, string? Nombre, string? Rol, string? Pin, string? Dni = null);
+
+/// <summary>Body del autologin SSO (/api/auth/sso).</summary>
+public record SsoLoginRequest(string? Ticket);

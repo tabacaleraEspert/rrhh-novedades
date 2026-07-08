@@ -79,6 +79,7 @@
         <MudText Typo="Typo.subtitle1" Class="mb-2" Style="font-weight:600;">Usuarios del sistema</MudText>
         <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">
             Cuentas que pueden ingresar (login por <b>email + PIN</b>). <b>Admin</b>: acceso total (incluida esta página). <b>RRHH</b>: dashboard y consultas.
+            El <b>DNI</b> (opcional) habilita el ingreso directo desde el Command Center.
         </MudText>
 
         <div class="d-flex gap-2 mb-3 flex-wrap align-center">
@@ -90,6 +91,7 @@
             </MudSelect>
             <MudTextField @bind-Value="_nuPass" Label="PIN (4-10 díg.)" InputType="InputType.Password"
                           Style="max-width:140px;" Margin="Margin.Dense" />
+            <MudTextField @bind-Value="_nuDni" Label="DNI (opcional)" Style="max-width:140px;" Margin="Margin.Dense" />
             <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PersonAdd"
                        OnClick="CrearUsuario">Crear usuario</MudButton>
         </div>
@@ -97,11 +99,12 @@
         <MudTable Items="_usuarios" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm">
             <NoRecordsContent><MudText>Sin usuarios.</MudText></NoRecordsContent>
             <HeaderContent>
-                <MudTh>Nombre</MudTh><MudTh>Email</MudTh><MudTh>Rol</MudTh><MudTh>Activo</MudTh><MudTh></MudTh>
+                <MudTh>Nombre</MudTh><MudTh>Email</MudTh><MudTh>DNI</MudTh><MudTh>Rol</MudTh><MudTh>Activo</MudTh><MudTh></MudTh>
             </HeaderContent>
             <RowTemplate>
                 <MudTd DataLabel="Nombre">@context.Nombre</MudTd>
                 <MudTd DataLabel="Email">@context.Email</MudTd>
+                <MudTd DataLabel="DNI">@(context.Dni ?? "—")</MudTd>
                 <MudTd DataLabel="Rol">
                     <MudChip T="string" Size="Size.Small" Color="@(context.Rol == Roles.Admin ? Color.Primary : Color.Default)">@context.Rol</MudChip>
                 </MudTd>
@@ -111,11 +114,28 @@
                 <MudTd>
                     <MudButton Size="Size.Small" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Password"
                                OnClick="@(() => AbrirReset(context))">Resetear PIN</MudButton>
+                    <MudIconButton Icon="@Icons.Material.Filled.Badge" Size="Size.Small" title="Editar DNI"
+                                   OnClick="@(() => AbrirDni(context))" />
                 </MudTd>
             </RowTemplate>
         </MudTable>
     </MudPaper>
 </AuthorizeView>
+
+<MudDialog @bind-Visible="_dniVisible" Options="_dlgOpts">
+    <TitleContent><MudText Typo="Typo.h6">Editar DNI</MudText></TitleContent>
+    <DialogContent>
+        <MudText Typo="Typo.body2" Class="mb-2">Usuario: <b>@_dniUser?.Email</b></MudText>
+        <MudTextField @bind-Value="_dniValor" Label="DNI (solo números; vacío lo quita)" Immediate="true" />
+        <MudText Typo="Typo.caption" Color="Color.Secondary">
+            Con DNI cargado, el usuario puede entrar directo desde el Command Center (sin PIN).
+        </MudText>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => _dniVisible = false)">Cancelar</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="ConfirmarDni">Guardar</MudButton>
+    </DialogActions>
+</MudDialog>
 
 <MudDialog @bind-Visible="_resetVisible" Options="_dlgOpts">
     <TitleContent><MudText Typo="Typo.h6">Resetear PIN</MudText></TitleContent>
@@ -147,9 +167,22 @@
     private string _nuEmail = string.Empty;
     private string _nuRol = Roles.RRHH;
     private string _nuPass = "0000";
+    private string _nuDni = string.Empty;
 
     private static bool EsPinValido(string pin) =>
         pin.Length is >= 4 and <= 10 && pin.All(char.IsDigit);
+
+    /// <summary>Normaliza un DNI ingresado: solo dígitos; vacío ⇒ null (sin SSO).</summary>
+    private static string? NormalizarDni(string valor)
+    {
+        var digitos = new string(valor.Where(char.IsDigit).ToArray());
+        return digitos.Length == 0 ? null : digitos;
+    }
+
+    // Edición de DNI (SSO Command Center)
+    private bool _dniVisible;
+    private Usuario? _dniUser;
+    private string _dniValor = string.Empty;
 
     // Reset de contraseña
     private bool _resetVisible;
@@ -253,10 +286,16 @@
             return;
         }
         var email = _nuEmail.Trim().ToLowerInvariant();
+        var dni = NormalizarDni(_nuDni);
         await using var db = await DbFactory.CreateDbContextAsync();
         if (await db.Usuarios.AnyAsync(u => u.Email == email))
         {
             Snackbar.Add("Ya existe un usuario con ese email.", Severity.Warning);
+            return;
+        }
+        if (dni is not null && await db.Usuarios.AnyAsync(u => u.Dni == dni))
+        {
+            Snackbar.Add("Ya existe un usuario con ese DNI.", Severity.Warning);
             return;
         }
         db.Usuarios.Add(new Usuario
@@ -265,10 +304,11 @@
             Email = email,
             Rol = _nuRol,
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(_nuPass),
-            Activo = true
+            Activo = true,
+            Dni = dni
         });
         await db.SaveChangesAsync();
-        _nuNombre = _nuEmail = string.Empty;
+        _nuNombre = _nuEmail = _nuDni = string.Empty;
         _nuPass = "0000";
         _nuRol = Roles.RRHH;
         await Cargar();
@@ -291,6 +331,33 @@
         e.Activo = valor;
         await db.SaveChangesAsync();
         u.Activo = valor;
+    }
+
+    private void AbrirDni(Usuario u)
+    {
+        _dniUser = u;
+        _dniValor = u.Dni ?? string.Empty;
+        _dniVisible = true;
+    }
+
+    private async Task ConfirmarDni()
+    {
+        if (!await EsAdminAsync()) { Snackbar.Add("Solo un Admin.", Severity.Error); return; }
+        if (_dniUser is null) return;
+        var dni = NormalizarDni(_dniValor);
+        await using var db = await DbFactory.CreateDbContextAsync();
+        if (dni is not null && await db.Usuarios.AnyAsync(u => u.Dni == dni && u.Id != _dniUser.Id))
+        {
+            Snackbar.Add("Ya existe otro usuario con ese DNI.", Severity.Warning);
+            return;
+        }
+        var e = await db.Usuarios.FindAsync(_dniUser.Id);
+        if (e is null) return;
+        e.Dni = dni;
+        await db.SaveChangesAsync();
+        _dniVisible = false;
+        await Cargar();
+        Snackbar.Add(dni is null ? $"DNI quitado para {e.Email}." : $"DNI actualizado para {e.Email}.", Severity.Success);
     }
 
     private void AbrirReset(Usuario u)
