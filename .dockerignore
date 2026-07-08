@@ -1,0 +1,14 @@
+# No mandar al contexto de build basura ni secretos
+**/bin/
+**/obj/
+**/.vs/
+**/.vscode/
+.git/
+.github/
+docs/
+tests/
+tools/
+**/appsettings.secrets.local.json
+**/*.user
+**/.DS_Store
+README.md

@@ -116,6 +116,11 @@ Resumen de lo pendiente para producción:
 - [ ] **Seguridad:** rotar API Key de Humand y Auth Token de Twilio; cambiar la contraseña seed;
   eliminar `docs/humand/datos_api.md`.
 - [ ] **Migraciones EF:** reemplazar `EnsureCreated` por `Migrate` cuando el esquema se estabilice.
+- [ ] **SSO Command Center (8-jul-2026):** código listo (ticket JWT de un solo uso → `/sso#ticket=`).
+  Falta para activarlo en prod: (1) correr el SQL manual de `DEPLOY-AZURE.md` §SSO **antes** del
+  deploy (columna `Dni` + tabla `SsoTicketsUsados`), (2) cargar `Sso--SharedSecret` en Key Vault
+  (recibido por canal seguro del equipo del Command Center), (3) cargar DNIs de los usuarios en
+  Configuración, (4) prueba end-to-end coordinada con el Command Center.
 
 ---
 

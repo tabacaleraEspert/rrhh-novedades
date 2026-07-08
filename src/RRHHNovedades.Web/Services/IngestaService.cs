@@ -21,6 +21,7 @@ public class IngestaService(
     IDbContextFactory<AppDbContext> dbFactory,
     IHumandService humand,
     IOptions<AsistenciaOptions> asistencia,
+    IReloj reloj,
     ILogger<IngestaService> logger) : IIngestaService
 {
     private readonly AsistenciaOptions _opt = asistencia.Value;
@@ -73,7 +74,7 @@ public class IngestaService(
         {
             if (!porId.TryGetValue(j.EmployeeInternalId, out var emp)) continue;
 
-            var (estado, motivo, minTarde) = Clasificar(j);
+            var (estado, motivo, minTarde) = Clasificar(j, reloj.Ahora);
             var turno = InferirTurno(j, emp, corte);
 
             if (!existentes.TryGetValue(emp.Id, out var nov))
@@ -97,12 +98,22 @@ public class IngestaService(
     }
 
     // internal para poder testearla directamente (InternalsVisibleTo RRHHNovedades.Tests).
-    internal static (EstadoJornada estado, string? motivo, int minTarde) Clasificar(JornadaHumand j)
+    // `ahora` (hora Argentina) permite distinguir "todavía no fichó porque su turno no empezó"
+    // (Pendiente) de "no vino" (Ausente). Si es null, se comporta como antes (sin Pendiente).
+    internal static (EstadoJornada estado, string? motivo, int minTarde) Clasificar(JornadaHumand j, DateTimeOffset? ahora = null)
     {
         bool absent = j.Incidences.Contains("ABSENT");
         bool late = j.Incidences.Contains("LATE");
         bool ficho = j.HoraEntrada is not null;
         var motivo = j.PermisosDelDia.Count > 0 ? string.Join(", ", j.PermisosDelDia) : null;
+
+        // ¿El turno todavía no arrancó? Solo aplica al día de HOY y si conocemos la hora teórica
+        // de entrada: antes de esa hora no fichó porque aún no le toca, no porque faltó.
+        bool turnoNoIniciado =
+            ahora is { } a
+            && j.Fecha == DateOnly.FromDateTime(a.DateTime)
+            && j.InicioTeorico is { } inicio
+            && TimeOnly.FromDateTime(a.DateTime) < inicio;
 
         // Permiso aprobado y no fichó ⇒ Justificado. Va ANTES que la regla de franco:
         // con permiso (vacaciones, etc.) Humand quita el horario del día (isWorkday/hasSchedule
@@ -126,6 +137,10 @@ public class IngestaService(
 
         if (ficho)
             return (EstadoJornada.Presente, motivo, 0);
+
+        // Laborable, sin fichada y sin ABSENT, pero su turno todavía no empezó: aún no es ausente.
+        if (turnoNoIniciado)
+            return (EstadoJornada.Pendiente, motivo, 0);
 
         // Laborable, sin fichada, sin ABSENT explícito y sin permiso.
         return (EstadoJornada.AusenteInjustificado, null, 0);

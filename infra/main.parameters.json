@@ -1,0 +1,13 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "location": { "value": "brazilsouth" },
+    "project": { "value": "rrhh" },
+    "env": { "value": "prod" },
+    "acrName": { "value": "acrrrhhprod" },
+    "// containerImage": "El script lo pasa con el tag {sha}; el workflow lo reemplaza en cada deploy.",
+    "containerImage": { "value": "acrrrhhprod.azurecr.io/rrhh-novedades:latest" },
+    "pgAdminUser": { "value": "rrhhadmin" }
+  }
+}

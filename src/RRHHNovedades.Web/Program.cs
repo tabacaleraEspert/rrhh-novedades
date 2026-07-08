@@ -1,3 +1,5 @@
+using Azure.Identity;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using MudBlazor.Services;
 using RRHHNovedades.Web.Components;
@@ -22,6 +24,23 @@ if (File.Exists(secretsFile))
     builder.Configuration.AddEnvironmentVariables();
 }
 
+// Producción (Azure): los secretos viven en Key Vault y se acceden con Managed Identity
+// (estándar Espert: cero secretos en app-settings). En local no se setea KeyVault:Uri, así que
+// esto no corre y se usan el archivo de secrets local / variables de entorno.
+// En el Vault los nombres usan "--" donde la config usa ":" (ej. ConnectionStrings--Default).
+var keyVaultUri = builder.Configuration["KeyVault:Uri"];
+if (!string.IsNullOrWhiteSpace(keyVaultUri))
+    builder.Configuration.AddAzureKeyVault(new Uri(keyVaultUri), new DefaultAzureCredential());
+
+// Detrás del ingress de Container Apps el TLS se termina en el borde; confiar en los headers
+// X-Forwarded-* para que Request.Scheme sea https (cookie de auth + redirecciones correctas).
+builder.Services.Configure<ForwardedHeadersOptions>(o =>
+{
+    o.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    o.KnownIPNetworks.Clear();
+    o.KnownProxies.Clear();
+});
+
 // UI
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
@@ -44,6 +63,9 @@ var app = builder.Build();
 }
 
 // HTTP pipeline
+// Primero de todo: aplicar los X-Forwarded-* del ingress (scheme/host reales).
+app.UseForwardedHeaders();
+
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error", createScopeForErrors: true);

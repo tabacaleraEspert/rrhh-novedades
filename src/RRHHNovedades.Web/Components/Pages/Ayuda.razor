@@ -42,6 +42,7 @@
                     <tr><td><MudChip T="string" Size="Size.Small" Color="Color.Warning">Tarde</MudChip></td><td>Fichó pasada la tolerancia. Se muestran los minutos de atraso (ej. "Tarde 25′").</td></tr>
                     <tr><td><MudChip T="string" Size="Size.Small" Color="Color.Error">Ausente</MudChip></td><td>No fichó y <b>no tiene permiso</b> cargado en Humand que cubra el día.</td></tr>
                     <tr><td><MudChip T="string" Size="Size.Small" Color="Color.Info">Justificado</MudChip></td><td>No vino pero <b>tiene permiso aprobado en Humand</b> (vacaciones, certificado médico, día de estudio, etc.). El motivo aparece en la columna "Motivo".</td></tr>
+                    <tr><td><MudChip T="string" Size="Size.Small" Color="Color.Default">Pendiente</MudChip></td><td>Su <b>turno todavía no empezó</b>, así que aún no se puede saber si va a venir. Típico de la gente de la tarde mirada a la mañana. Cuando arranca su turno pasa solo a Presente / Tarde / Ausente. No cuenta en el % de asistencia hasta entonces.</td></tr>
                     <tr><td><MudChip T="string" Size="Size.Small" Color="Color.Default">Franco</MudChip></td><td>No le correspondía trabajar ese día (sin turno asignado / día no laborable).</td></tr>
                 </tbody>
             </MudSimpleTable>
@@ -88,7 +89,8 @@
             </MudText>
             <MudText Typo="Typo.body2">
                 Desde la página <b>Bot de novedades</b> también se puede: <b>previsualizar</b> el parte antes de que salga,
-                <b>enviarlo manualmente</b> en cualquier momento, <b>sincronizar</b> los datos a demanda y ver el
+                <b>enviarlo manualmente</b> en cualquier momento (pide <b>confirmación</b> antes de mandar, indicando a
+                cuántos destinatarios va), <b>sincronizar</b> los datos a demanda y ver el
                 <b>historial de envíos</b> (a quién salió, cuándo y si llegó bien).
             </MudText>
             <MudAlert Severity="Severity.Info" Dense="true" Class="mt-2">
@@ -143,7 +145,10 @@
             <MudText Typo="Typo.body2" Class="mb-3">Sí: cambiá la fecha en el Dashboard. El historial se guarda día por día.</MudText>
 
             <MudText Typo="Typo.subtitle2">"¿Quién puede entrar al sistema?"</MudText>
-            <MudText Typo="Typo.body2">Usuarios con cuenta. Los roles <b>RRHH</b> y <b>Admin</b> tienen acceso completo: dashboard, bot de novedades y Configuración. Las altas de usuarios las gestiona Sistemas.</MudText>
+            <MudText Typo="Typo.body2" Class="mb-3">Usuarios con cuenta. Los roles <b>RRHH</b> y <b>Admin</b> tienen acceso completo: dashboard, bot de novedades y Configuración. Las altas de usuarios las gestiona Sistemas.</MudText>
+
+            <MudText Typo="Typo.subtitle2">"¿Puedo entrar desde el Command Center sin poner el PIN?"</MudText>
+            <MudText Typo="Typo.body2">Sí. Si entrás desde el <b>Command Center de Espert</b>, el sistema te reconoce y te abre la sesión solo — sin email ni PIN. Para que funcione, un Admin tiene que tener cargado tu <b>DNI</b> en Configuración → Usuarios del sistema. Si aparece "No pudimos validar el acceso", ingresá con tu email y PIN como siempre y avisale a Sistemas.</MudText>
         </ChildContent>
     </MudExpansionPanel>
 
@@ -151,5 +156,5 @@
 
 @code {
     // Actualizar esta fecha cada vez que se modifique el manual (ver CLAUDE.md → "Manual de uso").
-    private const string UltimaActualizacion = "16/06/2026";
+    private const string UltimaActualizacion = "08/07/2026";
 }

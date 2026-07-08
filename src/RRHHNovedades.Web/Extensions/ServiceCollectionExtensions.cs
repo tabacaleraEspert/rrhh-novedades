@@ -11,14 +11,15 @@ public static class ServiceCollectionExtensions
 {
     public static IServiceCollection AddAppServices(this IServiceCollection services, IConfiguration config, IWebHostEnvironment env)
     {
-        // Base de datos
+        // Base de datos (PostgreSQL — estándar Espert para apps transaccionales)
         services.AddDbContextFactory<AppDbContext>(options =>
-            options.UseSqlServer(config.GetConnectionString("Default")));
+            options.UseNpgsql(config.GetConnectionString("Default")));
 
         // Opciones
         services.Configure<AsistenciaOptions>(config.GetSection(AsistenciaOptions.SectionName));
         services.Configure<HumandOptions>(config.GetSection(HumandOptions.SectionName));
         services.Configure<TwilioOptions>(config.GetSection(TwilioOptions.SectionName));
+        services.Configure<SsoOptions>(config.GetSection(SsoOptions.SectionName));
 
         // Integración Humand (real o simulada según Humand:UseMock)
         var useMock = config.GetValue<bool>($"{HumandOptions.SectionName}:UseMock");
@@ -28,9 +29,12 @@ public static class ServiceCollectionExtensions
             services.AddHttpClient<IHumandService, HumandService>();
 
         // Servicios de aplicación
+        // Reloj único en hora Argentina: toda comparación/visualización de fecha-hora pasa por acá.
+        services.AddSingleton<IReloj, RelojArgentino>();
         services.AddSingleton<ITwilioService, TwilioService>();
         services.AddScoped<IIngestaService, IngestaService>();
         services.AddScoped<IParteService, ParteService>();
+        services.AddScoped<ISsoTicketService, SsoTicketService>();
         services.AddMemoryCache();
 
         // Bot: scheduler de los 2 partes diarios

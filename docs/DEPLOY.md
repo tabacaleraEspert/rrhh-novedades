@@ -1,5 +1,9 @@
 # Guía de despliegue a producción — Novedades RRHH
 
+> ⚠️ **DEPRECADA (18/06/2026).** Esta guía (App Service Windows + Azure SQL) **no cumple el
+> estándar Espert**. El deploy on-standard (Container Apps + PostgreSQL + Key Vault, Brazil South)
+> está en **`docs/DEPLOY-AZURE.md`**. Se mantiene este archivo solo como referencia histórica.
+
 Guía paso a paso para poner el bot a correr en Azure. Una vez desplegado, el sistema
 envía los 2 partes diarios solo (07:00 y 14:00, hora Argentina) sin que haya una máquina
 encendida.

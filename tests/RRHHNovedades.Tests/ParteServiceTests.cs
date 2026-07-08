@@ -101,4 +101,29 @@ public class ParteServiceTests
         Assert.Equal("0", v["5"]);
         Assert.DoesNotContain(v.Values, string.IsNullOrEmpty);
     }
+
+    [Fact]
+    public async Task YaSeEnvio_solo_es_true_tras_un_envio_exitoso_del_mismo_turno()
+    {
+        // Guard anti-reenvío: protege contra el re-spam de partes en cada reinicio del proceso.
+        var factory = new InMemoryFactory(nameof(YaSeEnvio_solo_es_true_tras_un_envio_exitoso_del_mismo_turno));
+        var hoy = new DateOnly(2026, 6, 9);
+        await using (var ctx = factory.CreateDbContext())
+        {
+            ctx.Empleados.Add(new Empleado { Id = 1, Nombre = "Juan", Apellido = "Pérez", EmployeeInternalId = "1" });
+            ctx.Novedades.Add(new NovedadDiaria { EmpleadoId = 1, Fecha = hoy, Turno = Turno.Manana, Estado = EstadoJornada.Presente });
+            ctx.Destinatarios.Add(new DestinatarioParte { Nombre = "RRHH", Telefono = "+5491100000000", Activo = true });
+            await ctx.SaveChangesAsync();
+        }
+
+        var twilio = Substitute.For<ITwilioService>();
+        twilio.EnviarMensajeAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+              .Returns(new ResultadoEnvio(true, "SM123", null));
+        var parte = new ParteService(factory, twilio, Options.Create(new TwilioOptions()), NullLogger<ParteService>.Instance);
+
+        Assert.False(await parte.YaSeEnvioAsync(hoy, Turno.Manana)); // todavía no se envió
+        await parte.EnviarParteAsync(hoy, Turno.Manana);
+        Assert.True(await parte.YaSeEnvioAsync(hoy, Turno.Manana));  // ya enviado → no reenviar
+        Assert.False(await parte.YaSeEnvioAsync(hoy, Turno.Tarde));  // el otro turno es independiente
+    }
 }

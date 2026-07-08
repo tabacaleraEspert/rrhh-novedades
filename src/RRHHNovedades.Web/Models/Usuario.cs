@@ -8,6 +8,8 @@ public class Usuario
     public string PasswordHash { get; set; } = string.Empty;
     public string Rol { get; set; } = string.Empty; // "Admin" o "RRHH"
     public bool Activo { get; set; } = true;
+    /// <summary>DNI (solo dígitos) para el autologin SSO desde el Command Center. Null = sin SSO.</summary>
+    public string? Dni { get; set; }
 }
 
 public static class Roles

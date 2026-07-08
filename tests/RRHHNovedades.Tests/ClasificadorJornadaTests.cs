@@ -98,4 +98,45 @@ public class ClasificadorJornadaTests
         Assert.Equal(EstadoJornada.Tarde, estado);
         Assert.Equal(0, min);
     }
+
+    // --- Pendiente: el turno todavía no empezó (bug del dashboard: turno tarde aparecía como Ausente a la mañana) ---
+
+    private static DateTimeOffset AhoraAr(int h, int m, int dia = 9) =>
+        new(2026, 6, dia, h, m, 0, TimeSpan.FromHours(-3));
+
+    [Fact]
+    public void Turno_no_iniciado_es_Pendiente_no_Ausente()
+    {
+        // 10:30 AR, turno tarde que entra 14:00: no fichó porque aún no le toca → Pendiente.
+        var (estado, _, _) = IngestaService.Clasificar(
+            Jornada(inicioTeorico: new TimeOnly(14, 0)), AhoraAr(10, 30));
+        Assert.Equal(EstadoJornada.Pendiente, estado);
+    }
+
+    [Fact]
+    public void Turno_ya_iniciado_sin_fichada_es_Ausente()
+    {
+        // 15:00 AR, el turno entró 14:00 y no fichó → ahora sí Ausente.
+        var (estado, _, _) = IngestaService.Clasificar(
+            Jornada(inicioTeorico: new TimeOnly(14, 0)), AhoraAr(15, 0));
+        Assert.Equal(EstadoJornada.AusenteInjustificado, estado);
+    }
+
+    [Fact]
+    public void Pendiente_solo_aplica_al_dia_de_hoy()
+    {
+        // La jornada es del 9; "ahora" es del 10. Un día pasado se evalúa completo, nunca Pendiente.
+        var (estado, _, _) = IngestaService.Clasificar(
+            Jornada(inicioTeorico: new TimeOnly(14, 0)), AhoraAr(10, 30, dia: 10));
+        Assert.Equal(EstadoJornada.AusenteInjustificado, estado);
+    }
+
+    [Fact]
+    public void Antes_del_turno_pero_con_ABSENT_de_Humand_respeta_Humand()
+    {
+        // Si Humand ya marcó ABSENT, mandamos eso aunque sea temprano (no lo pisamos con Pendiente).
+        var (estado, _, _) = IngestaService.Clasificar(
+            Jornada(incidences: ["ABSENT"], inicioTeorico: new TimeOnly(14, 0)), AhoraAr(10, 30));
+        Assert.Equal(EstadoJornada.AusenteInjustificado, estado);
+    }
 }
