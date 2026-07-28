@@ -40,8 +40,8 @@ public interface IPresentismoService
 /// Reglas (definidas con RRHH, 28-jul-2026):
 ///   La base del mes es SIEMPRE 30 días, sin importar las fichadas.
 ///   CANT. DIAS TRABAJADOS = 30 − feriados − todas las ausencias (las columnas suman 30).
-///   Cada tipo de licencia de Humand tiene su PROPIA columna (dinámicas: los tipos salen de los
-///   datos sincronizados; un tipo nuevo en Humand aparece solo).
+///   Cada tipo de licencia de Humand tiene su PROPIA columna, y solo aparecen las columnas de
+///   los tipos con días perdidos en el período consultado.
 ///   TOTAL INASISTENCIA = injustificadas + todas las licencias.
 ///   TOTAL DÍAS LIQUIDADOS = 30 − injustificadas − licencias "sin goce" (el resto se paga).
 ///   PPP = "DESCONTAR" si hay al menos 1 injustificada; si no "Si".
@@ -64,18 +64,6 @@ public class PresentismoService(
             .OrderBy(n => n.Fecha)
             .ToListAsync(ct);
 
-        // Catálogo de columnas: todos los tipos vistos en la base (no solo el período), así la
-        // planilla es estable mes a mes y refleja lo cargado en Humand.
-        var tipos = (await db.Novedades.AsNoTracking()
-                .Where(n => n.MotivoNovedad != null)
-                .Select(n => n.MotivoNovedad!)
-                .Distinct()
-                .ToListAsync(ct))
-            .SelectMany(SepararTipos)
-            .Distinct()
-            .OrderBy(t => t)
-            .ToList();
-
         var nocturnas = (await nocturnidad.ReporteMensualAsync(anio, mes, ct))
             .ToDictionary(x => x.EmpleadoId, x => x.HorasNocturnas);
 
@@ -83,6 +71,14 @@ public class PresentismoService(
             .GroupBy(n => n.Empleado.Id)
             .Select(g => ArmarFila(g.First().Empleado, [.. g], nocturnas.GetValueOrDefault(g.Key)))
             .OrderBy(f => f.ApellidoNombre)
+            .ToList();
+
+        // Columnas: SOLO los tipos de licencia con días perdidos en ESTE período (los que no se
+        // usaron ese mes no aparecen; un tipo nuevo de Humand aparece solo cuando alguien lo usa).
+        var tipos = filas
+            .SelectMany(f => f.Licencias.Keys)
+            .Distinct()
+            .OrderBy(t => t)
             .ToList();
 
         return new PresentismoReporte(tipos, filas);
