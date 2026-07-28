@@ -5,18 +5,6 @@ using RRHHNovedades.Web.Models;
 
 namespace RRHHNovedades.Web.Services;
 
-/// <summary>Bucket de licencia de la planilla de presentismo (columnas E–K del formato de RRHH).</summary>
-public enum TipoLicencia
-{
-    Ninguna,
-    Enfermedad,     // "Lic. por enfermedad"
-    SinGoce,        // (sin tipo en Humand hoy; se mapea por nombre si aparece)
-    ConGoce,        // (ídem)
-    Especial,       // enfermedad familiar, día gremial, mudanza, etc.
-    Accidente,      // "Lic. por accidente de trabajo"
-    Vacaciones
-}
-
 /// <summary>Fila de la planilla de presentismo de un empleado en el período.</summary>
 public record PresentismoEmpleado(
     int EmpleadoId,
@@ -26,22 +14,22 @@ public record PresentismoEmpleado(
     int Trabajados,
     int Feriados,
     int Injustificadas,
-    int Enfermedad,
-    int SinGoce,
-    int ConGoce,
-    int Especial,
-    int Accidente,
-    int Vacaciones,
+    IReadOnlyDictionary<string, int> Licencias, // días por tipo de licencia de Humand (nombre normalizado)
     int HorasNocturnas,
     string Observacion,
     string Ppp,
     int TotalInasistencia,
     int TotalLiquidados);
 
+/// <summary>Planilla del período: columnas de licencia dinámicas (todos los tipos cargados en Humand).</summary>
+public record PresentismoReporte(
+    IReadOnlyList<string> TiposLicencia,
+    IReadOnlyList<PresentismoEmpleado> Filas);
+
 public interface IPresentismoService
 {
     /// <summary>Planilla del período de liquidación (26 del mes anterior al 25, inclusive).</summary>
-    Task<IReadOnlyList<PresentismoEmpleado>> ReporteMensualAsync(int anio, int mes, CancellationToken ct = default);
+    Task<PresentismoReporte> ReporteMensualAsync(int anio, int mes, CancellationToken ct = default);
 
     /// <summary>Excel (.xlsx) con el formato de la planilla de RRHH. Respeta el filtro de área.</summary>
     Task<byte[]> ExcelMensualAsync(int anio, int mes, string? area = null, CancellationToken ct = default);
@@ -52,17 +40,20 @@ public interface IPresentismoService
 /// Reglas (definidas con RRHH, 28-jul-2026):
 ///   La base del mes es SIEMPRE 30 días, sin importar las fichadas.
 ///   CANT. DIAS TRABAJADOS = 30 − feriados − todas las ausencias (las columnas suman 30).
-///   Las ausencias salen de Humand: feriado > licencia por tipo de solicitud > injustificada
-///   (un día cuenta una sola vez; francos y fichadas no alteran la base).
+///   Cada tipo de licencia de Humand tiene su PROPIA columna (dinámicas: los tipos salen de los
+///   datos sincronizados; un tipo nuevo en Humand aparece solo).
 ///   TOTAL INASISTENCIA = injustificadas + todas las licencias.
-///   TOTAL DÍAS LIQUIDADOS = 30 − injustificadas − sin goce (justificadas y vacaciones se pagan).
+///   TOTAL DÍAS LIQUIDADOS = 30 − injustificadas − licencias "sin goce" (el resto se paga).
 ///   PPP = "DESCONTAR" si hay al menos 1 injustificada; si no "Si".
 /// </summary>
 public class PresentismoService(
     IDbContextFactory<AppDbContext> dbFactory,
     INocturnidadService nocturnidad) : IPresentismoService
 {
-    public async Task<IReadOnlyList<PresentismoEmpleado>> ReporteMensualAsync(int anio, int mes, CancellationToken ct = default)
+    /// <summary>Base mensual fija de la liquidación: siempre 30 días, sin importar fichadas.</summary>
+    internal const int BaseDias = 30;
+
+    public async Task<PresentismoReporte> ReporteMensualAsync(int anio, int mes, CancellationToken ct = default)
     {
         var (desde, hasta) = NocturnidadService.PeriodoLiquidacion(anio, mes);
 
@@ -73,24 +64,34 @@ public class PresentismoService(
             .OrderBy(n => n.Fecha)
             .ToListAsync(ct);
 
+        // Catálogo de columnas: todos los tipos vistos en la base (no solo el período), así la
+        // planilla es estable mes a mes y refleja lo cargado en Humand.
+        var tipos = (await db.Novedades.AsNoTracking()
+                .Where(n => n.MotivoNovedad != null)
+                .Select(n => n.MotivoNovedad!)
+                .Distinct()
+                .ToListAsync(ct))
+            .SelectMany(SepararTipos)
+            .Distinct()
+            .OrderBy(t => t)
+            .ToList();
+
         var nocturnas = (await nocturnidad.ReporteMensualAsync(anio, mes, ct))
             .ToDictionary(x => x.EmpleadoId, x => x.HorasNocturnas);
 
-        return novedades
+        var filas = novedades
             .GroupBy(n => n.Empleado.Id)
             .Select(g => ArmarFila(g.First().Empleado, [.. g], nocturnas.GetValueOrDefault(g.Key)))
-            .Where(f => f.TotalLiquidados > 0 || f.TotalInasistencia > 0)
             .OrderBy(f => f.ApellidoNombre)
             .ToList();
-    }
 
-    /// <summary>Base mensual fija de la liquidación: siempre 30 días, sin importar fichadas.</summary>
-    internal const int BaseDias = 30;
+        return new PresentismoReporte(tipos, filas);
+    }
 
     private static PresentismoEmpleado ArmarFila(Empleado emp, List<NovedadDiaria> dias, int horasNocturnas)
     {
         int feriados = 0, injustificadas = 0;
-        var lic = new Dictionary<TipoLicencia, int>();
+        var lic = new Dictionary<string, int>();
         var obs = new List<string>();
 
         foreach (var d in dias)
@@ -100,7 +101,7 @@ public class PresentismoService(
             if (d.EsFeriado) { feriados++; continue; }
             if (d.Estado == EstadoJornada.AusenteJustificado)
             {
-                var tipo = ClasificarMotivo(d.MotivoNovedad);
+                var tipo = SepararTipos(d.MotivoNovedad).FirstOrDefault() ?? "Licencia";
                 lic[tipo] = lic.GetValueOrDefault(tipo) + 1;
                 continue;
             }
@@ -113,14 +114,9 @@ public class PresentismoService(
         foreach (var grupo in Rangos(dias, d => d.Estado == EstadoJornada.AusenteInjustificado && !d.EsFeriado, _ => "Injustificada"))
             obs.Add(grupo);
 
-        int enfermedad = lic.GetValueOrDefault(TipoLicencia.Enfermedad);
-        int sinGoce = lic.GetValueOrDefault(TipoLicencia.SinGoce);
-        int conGoce = lic.GetValueOrDefault(TipoLicencia.ConGoce);
-        int especial = lic.GetValueOrDefault(TipoLicencia.Especial) + lic.GetValueOrDefault(TipoLicencia.Ninguna);
-        int accidente = lic.GetValueOrDefault(TipoLicencia.Accidente);
-        int vacaciones = lic.GetValueOrDefault(TipoLicencia.Vacaciones);
-
-        int totalInasistencia = injustificadas + enfermedad + sinGoce + conGoce + especial + accidente + vacaciones;
+        int totalLicencias = lic.Values.Sum();
+        int sinGoce = lic.Where(kv => EsSinGoce(kv.Key)).Sum(kv => kv.Value);
+        int totalInasistencia = injustificadas + totalLicencias;
         // Base 30 fija: trabajados por resta (las columnas suman 30) y liquidados solo pierde
         // las no pagas (injustificadas y sin goce).
         int trabajados = Math.Max(0, BaseDias - feriados - totalInasistencia);
@@ -128,8 +124,7 @@ public class PresentismoService(
 
         return new PresentismoEmpleado(
             emp.Id, emp.Legajo, emp.ApellidoNombre, emp.Area,
-            trabajados, feriados, injustificadas,
-            enfermedad, sinGoce, conGoce, especial, accidente, vacaciones,
+            trabajados, feriados, injustificadas, lic,
             horasNocturnas,
             string.Join("; ", obs),
             injustificadas > 0 ? "DESCONTAR" : "Si",
@@ -137,24 +132,17 @@ public class PresentismoService(
     }
 
     /// <summary>
-    /// Mapea el nombre del tipo de solicitud de Humand al bucket de la planilla.
-    /// internal para testear (InternalsVisibleTo RRHHNovedades.Tests).
+    /// El motivo puede venir con varios tipos unidos por coma ("Vacaciones, Lic. por enfermedad").
+    /// Devuelve los nombres normalizados (trim). internal para testear.
     /// </summary>
-    internal static TipoLicencia ClasificarMotivo(string? motivo)
-    {
-        if (string.IsNullOrWhiteSpace(motivo)) return TipoLicencia.Ninguna;
-        var m = motivo.ToLowerInvariant();
-        if (m.Contains("vacacion")) return TipoLicencia.Vacaciones;
-        if (m.Contains("accidente")) return TipoLicencia.Accidente;
-        if (m.Contains("sin goce")) return TipoLicencia.SinGoce;
-        if (m.Contains("con goce") || m.Contains("c/goce")) return TipoLicencia.ConGoce;
-        // Enfermedad FAMILIAR va a Especial; la propia a Enfermedad (evaluar "familiar" primero).
-        if (m.Contains("familiar") || m.Contains("gremial") || m.Contains("mudanza") || m.Contains("estudio")
-            || m.Contains("matrimonio") || m.Contains("nacimiento") || m.Contains("fallecimiento") || m.Contains("duelo"))
-            return TipoLicencia.Especial;
-        if (m.Contains("enfermedad")) return TipoLicencia.Enfermedad;
-        return TipoLicencia.Especial;
-    }
+    internal static IEnumerable<string> SepararTipos(string? motivo) =>
+        (motivo ?? string.Empty)
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(t => t.Length > 0);
+
+    /// <summary>Licencia no paga: no suma a los días liquidados.</summary>
+    internal static bool EsSinGoce(string tipo) =>
+        tipo.Contains("sin goce", StringComparison.OrdinalIgnoreCase);
 
     // Agrupa días consecutivos que cumplen el filtro y comparten etiqueta → "Etiqueta dd/MM al dd/MM".
     private static IEnumerable<string> Rangos(List<NovedadDiaria> dias, Func<NovedadDiaria, bool> filtro, Func<NovedadDiaria, string> etiqueta)
@@ -178,45 +166,43 @@ public class PresentismoService(
     public async Task<byte[]> ExcelMensualAsync(int anio, int mes, string? area = null, CancellationToken ct = default)
     {
         var (desde, hasta) = NocturnidadService.PeriodoLiquidacion(anio, mes);
-        var filas = (await ReporteMensualAsync(anio, mes, ct))
-            .Where(f => area is null || f.Area == area)
-            .ToList();
+        var reporte = await ReporteMensualAsync(anio, mes, ct);
+        var tipos = reporte.TiposLicencia;
+        var filas = reporte.Filas.Where(f => area is null || f.Area == area).ToList();
 
         using var wb = new XLWorkbook();
         var ws = wb.Worksheets.Add($"{mes:00}-{anio}");
 
-        string[] cab = ["LEGAJOS", "NOMBRE Y APELLIDO", "CANT. DIAS TRABAJADOS", "FERIADOS",
-            "INASISTENCIA INJUSTIFICADA", "LIC. ENFERMEDAD", "LIC SIN GOCE", "LIC. C/GOCE",
-            "LIC. ESPECIAL", "LIC. ACCIDENTE PROF", "VACACIONES", "HS NOCTURNAS",
-            "OBSERVACION", "PPP", "TOTAL INASISTENCIA", "TOTAL DIAS LIQUIDADOS"];
-        for (int c = 0; c < cab.Length; c++) ws.Cell(1, c + 1).Value = cab[c];
-        ws.Range(1, 1, 1, cab.Length).Style.Font.SetBold();
+        var cab = new List<string> { "LEGAJOS", "NOMBRE Y APELLIDO", "CANT. DIAS TRABAJADOS", "FERIADOS", "INASISTENCIA INJUSTIFICADA" };
+        cab.AddRange(tipos.Select(t => t.ToUpperInvariant()));
+        cab.AddRange(["HS NOCTURNAS", "OBSERVACION", "PPP", "TOTAL INASISTENCIA", "TOTAL DIAS LIQUIDADOS"]);
+        for (int c = 0; c < cab.Count; c++) ws.Cell(1, c + 1).Value = cab[c];
+        ws.Range(1, 1, 1, cab.Count).Style.Font.SetBold();
 
         int f = 2;
         foreach (var x in filas)
         {
-            ws.Cell(f, 1).Value = x.Legajo ?? "—";
-            ws.Cell(f, 2).Value = x.ApellidoNombre;
-            ws.Cell(f, 3).Value = x.Trabajados;
-            Num(ws.Cell(f, 4), x.Feriados);
-            Num(ws.Cell(f, 5), x.Injustificadas);
-            Num(ws.Cell(f, 6), x.Enfermedad);
-            Num(ws.Cell(f, 7), x.SinGoce);
-            Num(ws.Cell(f, 8), x.ConGoce);
-            Num(ws.Cell(f, 9), x.Especial);
-            Num(ws.Cell(f, 10), x.Accidente);
-            Num(ws.Cell(f, 11), x.Vacaciones);
-            if (x.HorasNocturnas > 0) ws.Cell(f, 12).Value = x.HorasNocturnas; else ws.Cell(f, 12).Value = "-";
-            ws.Cell(f, 13).Value = x.Observacion;
-            ws.Cell(f, 14).Value = x.Ppp;
-            Num(ws.Cell(f, 15), x.TotalInasistencia);
-            ws.Cell(f, 16).Value = x.TotalLiquidados;
+            int col = 1;
+            ws.Cell(f, col++).Value = x.Legajo ?? "—";
+            ws.Cell(f, col++).Value = x.ApellidoNombre;
+            ws.Cell(f, col++).Value = x.Trabajados;
+            Num(ws.Cell(f, col++), x.Feriados);
+            Num(ws.Cell(f, col++), x.Injustificadas);
+            foreach (var t in tipos)
+                Num(ws.Cell(f, col++), x.Licencias.GetValueOrDefault(t));
+            if (x.HorasNocturnas > 0) ws.Cell(f, col).Value = x.HorasNocturnas; else ws.Cell(f, col).Value = "-";
+            col++;
+            ws.Cell(f, col++).Value = x.Observacion;
+            ws.Cell(f, col++).Value = x.Ppp;
+            Num(ws.Cell(f, col++), x.TotalInasistencia);
+            ws.Cell(f, col).Value = x.TotalLiquidados;
             f++;
         }
         ws.Cell(f + 1, 2).Value = $"Período: {desde:dd/MM/yyyy} al {hasta.AddDays(-1):dd/MM/yyyy}" + (area is null ? "" : $" — {area}");
         ws.Cell(f + 1, 2).Style.Font.SetItalic();
         ws.Columns().AdjustToContents();
-        ws.Column(13).Width = Math.Min(ws.Column(13).Width, 60);
+        int obsCol = 5 + tipos.Count + 2;
+        ws.Column(obsCol).Width = Math.Min(ws.Column(obsCol).Width, 60);
 
         using var ms = new MemoryStream();
         wb.SaveAs(ms);

@@ -14,19 +14,25 @@ public class PresentismoServiceTests
 {
     private static TimeOnly T(int h, int m = 0) => new(h, m);
 
-    // ── Mapeo de tipos reales de Humand a columnas de la planilla ──
-    [Theory]
-    [InlineData("Vacaciones", TipoLicencia.Vacaciones)]
-    [InlineData("Lic. por enfermedad ", TipoLicencia.Enfermedad)]
-    [InlineData("Lic. por enfermedad familiar", TipoLicencia.Especial)] // familiar gana sobre enfermedad
-    [InlineData("Dia gremial", TipoLicencia.Especial)]
-    [InlineData("Lic. por mudanza", TipoLicencia.Especial)]
-    [InlineData("Lic. por accidente de trabajo", TipoLicencia.Accidente)]
-    [InlineData("Licencia sin goce de sueldo", TipoLicencia.SinGoce)]
-    [InlineData(null, TipoLicencia.Ninguna)]
-    public void Clasifica_los_tipos_de_solicitud_de_Humand(string? motivo, TipoLicencia esperado)
+    // ── Tipos de licencia dinámicos: nombres tal como vienen de Humand ──
+    [Fact]
+    public void Separa_y_normaliza_los_tipos_del_motivo()
     {
-        Assert.Equal(esperado, PresentismoService.ClasificarMotivo(motivo));
+        Assert.Equal(["Vacaciones"], PresentismoService.SepararTipos("Vacaciones"));
+        // Motivo combinado y con espacios (así lo guarda la ingesta cuando hay 2 solicitudes).
+        Assert.Equal(["Lic. por enfermedad familiar", "Lic. por enfermedad"],
+            PresentismoService.SepararTipos("Lic. por enfermedad familiar, Lic. por enfermedad "));
+        Assert.Empty(PresentismoService.SepararTipos(null));
+    }
+
+    [Theory]
+    [InlineData("Licencia sin goce de sueldo", true)]
+    [InlineData("Lic. SIN GOCE", true)]
+    [InlineData("Vacaciones", false)]
+    [InlineData("Lic. por enfermedad", false)]
+    public void Sin_goce_se_detecta_por_nombre(string tipo, bool esperado)
+    {
+        Assert.Equal(esperado, PresentismoService.EsSinGoce(tipo));
     }
 
     [Fact]
@@ -73,17 +79,20 @@ public class PresentismoServiceTests
     }
 
     [Fact]
-    public async Task Fila_completa_con_buckets_ppp_y_totales()
+    public async Task Fila_completa_con_columnas_dinamicas_ppp_y_totales()
     {
-        var svc = await SetupAsync(nameof(Fila_completa_con_buckets_ppp_y_totales));
-        var fila = Assert.Single(await svc.ReporteMensualAsync(2026, 7));
+        var svc = await SetupAsync(nameof(Fila_completa_con_columnas_dinamicas_ppp_y_totales));
+        var reporte = await svc.ReporteMensualAsync(2026, 7);
+        var fila = Assert.Single(reporte.Filas);
 
+        // Columnas dinámicas: los tipos tal como están cargados en Humand, normalizados.
+        Assert.Equal(["Lic. por enfermedad", "Vacaciones"], reporte.TiposLicencia);
         Assert.Equal("871", fila.Legajo);
         Assert.Equal(30 - 1 - 4, fila.Trabajados);             // base 30 − feriado − 4 ausencias (fichadas no importan)
         Assert.Equal(1, fila.Feriados);
         Assert.Equal(1, fila.Injustificadas);
-        Assert.Equal(2, fila.Vacaciones);
-        Assert.Equal(1, fila.Enfermedad);
+        Assert.Equal(2, fila.Licencias["Vacaciones"]);
+        Assert.Equal(1, fila.Licencias["Lic. por enfermedad"]);
         Assert.Equal(8, fila.HorasNocturnas);                  // la noche del 1/7 (22→06)
         Assert.Equal("DESCONTAR", fila.Ppp);                   // tuvo 1 injustificada
         Assert.Equal(4, fila.TotalInasistencia);               // 1 injust + 2 vac + 1 enf
@@ -104,7 +113,7 @@ public class PresentismoServiceTests
         }
         var svc = new PresentismoService(factory, new NocturnidadService(factory));
 
-        var fila = Assert.Single(await svc.ReporteMensualAsync(2026, 7));
+        var fila = Assert.Single((await svc.ReporteMensualAsync(2026, 7)).Filas);
         Assert.Equal("Si", fila.Ppp);
         Assert.Equal(30, fila.Trabajados);       // sin ausencias ni feriados: base completa
         Assert.Equal(30, fila.TotalLiquidados);
@@ -120,12 +129,15 @@ public class PresentismoServiceTests
         using var ms = new MemoryStream(bytes);
         using var wb = new ClosedXML.Excel.XLWorkbook(ms);
         var ws = wb.Worksheet("07-2026");
+        // Columnas: 5 fijas + 2 tipos dinámicos (enfermedad, vacaciones) + 5 fijas = 12.
         Assert.Equal("LEGAJOS", ws.Cell(1, 1).GetString());
-        Assert.Equal("TOTAL DIAS LIQUIDADOS", ws.Cell(1, 16).GetString());
+        Assert.Equal("LIC. POR ENFERMEDAD", ws.Cell(1, 6).GetString());
+        Assert.Equal("VACACIONES", ws.Cell(1, 7).GetString());
+        Assert.Equal("TOTAL DIAS LIQUIDADOS", ws.Cell(1, 12).GetString());
         Assert.Equal("871", ws.Cell(2, 1).GetString());
         Assert.Equal(25, ws.Cell(2, 3).GetValue<int>());       // trabajados = 30 − 1 feriado − 4 ausencias
-        Assert.Equal("DESCONTAR", ws.Cell(2, 14).GetString()); // PPP
-        Assert.Equal(29, ws.Cell(2, 16).GetValue<int>());      // días liquidados = 30 − 1 injustificada
-        Assert.Equal("", ws.Cell(2, 7).GetString());           // sin goce en 0 ⇒ vacío como la planilla original
+        Assert.Equal(2, ws.Cell(2, 7).GetValue<int>());        // vacaciones
+        Assert.Equal("DESCONTAR", ws.Cell(2, 10).GetString()); // PPP
+        Assert.Equal(29, ws.Cell(2, 12).GetValue<int>());      // días liquidados = 30 − 1 injustificada
     }
 }

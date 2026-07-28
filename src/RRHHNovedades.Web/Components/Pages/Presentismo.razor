@@ -69,10 +69,10 @@
             <MudTh Style="text-align:right;">Trab.</MudTh>
             <MudTh Style="text-align:right;">Fer.</MudTh>
             <MudTh Style="text-align:right;">Injust.</MudTh>
-            <MudTh Style="text-align:right;">Enferm.</MudTh>
-            <MudTh Style="text-align:right;">Especial</MudTh>
-            <MudTh Style="text-align:right;">Accid.</MudTh>
-            <MudTh Style="text-align:right;">Vacac.</MudTh>
+            @foreach (var t in _tipos)
+            {
+                <MudTh Style="text-align:right;white-space:nowrap;" title="@t">@Abreviar(t)</MudTh>
+            }
             <MudTh Style="text-align:right;">Hs noct.</MudTh>
             <MudTh>PPP</MudTh>
             <MudTh Style="text-align:right;">Total inas.</MudTh>
@@ -86,10 +86,10 @@
             <MudTd Style="text-align:right;">@context.Trabajados</MudTd>
             <MudTd Style="text-align:right;">@Cero(context.Feriados)</MudTd>
             <MudTd Style="text-align:right;">@Cero(context.Injustificadas)</MudTd>
-            <MudTd Style="text-align:right;">@Cero(context.Enfermedad)</MudTd>
-            <MudTd Style="text-align:right;">@Cero(context.Especial + context.SinGoce + context.ConGoce)</MudTd>
-            <MudTd Style="text-align:right;">@Cero(context.Accidente)</MudTd>
-            <MudTd Style="text-align:right;">@Cero(context.Vacaciones)</MudTd>
+            @foreach (var t in _tipos)
+            {
+                <MudTd Style="text-align:right;">@Cero(context.Licencias.GetValueOrDefault(t))</MudTd>
+            }
             <MudTd Style="text-align:right;">@Cero(context.HorasNocturnas)</MudTd>
             <MudTd>
                 <MudChip T="string" Size="Size.Small" Color="@(context.Ppp == "Si" ? Color.Success : Color.Error)">@context.Ppp</MudChip>
@@ -109,6 +109,7 @@
     private List<string> _areas = [];
     private bool _loading = true;
     private IReadOnlyList<PresentismoEmpleado> _filas = [];
+    private IReadOnlyList<string> _tipos = [];
     private string _buscar = string.Empty;
     private List<PresentismoEmpleado> _filtradas =>
         _filas.Where(f => (_area is null || f.Area == _area) && PasaBusqueda(f)).ToList();
@@ -143,7 +144,9 @@
         _loading = true;
         try
         {
-            _filas = await PresentismoSrv.ReporteMensualAsync(_anio, _mes);
+            var reporte = await PresentismoSrv.ReporteMensualAsync(_anio, _mes);
+            _filas = reporte.Filas;
+            _tipos = reporte.TiposLicencia;
             _areas = _filas.Select(f => f.Area).Where(a => !string.IsNullOrWhiteSpace(a))
                 .Select(a => a!).Distinct().OrderBy(a => a).ToList();
             if (_area is not null && !_areas.Contains(_area)) _area = null;
@@ -191,6 +194,12 @@
     }
 
     private static string Cero(int v) => v == 0 ? "—" : v.ToString();
+
+    // Encabezado corto para no ensanchar la tabla ("Lic. por enfermedad familiar" → "Enf. familiar").
+    private static string Abreviar(string tipo) => tipo
+        .Replace("Lic. por ", "", StringComparison.OrdinalIgnoreCase)
+        .Replace("Licencia por ", "", StringComparison.OrdinalIgnoreCase) is var t && t.Length > 0
+            ? char.ToUpperInvariant(t[0]) + t[1..] : tipo;
 
     private static string NombreMes(int m) =>
         System.Globalization.CultureInfo.GetCultureInfo("es-AR").DateTimeFormat.GetMonthName(m) is { } n
