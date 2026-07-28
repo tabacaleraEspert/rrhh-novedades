@@ -42,6 +42,7 @@ public class IngestaTurnoNocheTests
 
     [Theory]
     [InlineData("Turno C Noche", true)]
+    [InlineData("Vigilancia Turno Noche", true)] // ítem real agregado en Humand el 28-jul-2026
     [InlineData("turno c NOCHE", true)]
     [InlineData("Turno A - Cristian", false)]
     [InlineData("Turno B - Derlis", false)]
