@@ -1,0 +1,190 @@
+@page "/presentismo"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject IPresentismoService PresentismoSrv
+@inject IIngestaService Ingesta
+@inject IReloj Reloj
+@inject IJSRuntime JS
+@inject ISnackbar Snackbar
+@using RRHHNovedades.Web.Services
+
+<PageTitle>Presentismo - RRHH</PageTitle>
+
+<div class="d-flex align-center justify-space-between mb-1 flex-wrap gap-2">
+    <div>
+        <MudText Typo="Typo.h5" Style="font-weight:600;">Presentismo</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary">
+            Planilla del período de liquidación (@PeriodoTexto()): días trabajados, feriados, licencias por
+            tipo (según las solicitudes de Humand), inasistencias, horas nocturnas y días a liquidar.
+        </MudText>
+    </div>
+    <div class="d-flex align-center gap-2 flex-wrap">
+        <MudSelect T="string" Label="Área" Value="_area" ValueChanged="OnAreaChanged" Clearable="true"
+                   Style="min-width:180px;" Margin="Margin.Dense" Dense="true">
+            @foreach (var a in _areas)
+            {
+                <MudSelectItem T="string" Value="@a">@a</MudSelectItem>
+            }
+        </MudSelect>
+        <MudSelect T="int" Label="Mes" Value="_mes" ValueChanged="OnMesChanged" Style="min-width:140px;"
+                   Margin="Margin.Dense" Dense="true">
+            @for (int m = 1; m <= 12; m++)
+            {
+                var mes = m;
+                <MudSelectItem T="int" Value="@mes">@NombreMes(mes)</MudSelectItem>
+            }
+        </MudSelect>
+        <MudSelect T="int" Label="Año" Value="_anio" ValueChanged="OnAnioChanged" Style="min-width:110px;"
+                   Margin="Margin.Dense" Dense="true">
+            @foreach (var a in _anios)
+            {
+                <MudSelectItem T="int" Value="@a">@a</MudSelectItem>
+            }
+        </MudSelect>
+        <MudButton Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.CloudSync"
+                   OnClick="SincronizarPeriodo" Disabled="_syncing" title="Trae de Humand los días del período elegido">
+            @(_syncing ? _syncMsg : "Sincronizar período")
+        </MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Filled.Download"
+                   OnClick="ExportarExcel" Disabled="@(_filtradas.Count == 0 || _syncing)">Excel</MudButton>
+    </div>
+</div>
+
+<MudPaper Class="mt-3" Elevation="1" Style="overflow-x:auto;">
+    <MudTable T="PresentismoEmpleado" Items="_filtradas" Dense="true" Hover="true" Loading="_loading" Breakpoint="Breakpoint.None">
+        <NoRecordsContent>
+            <MudText Class="pa-4">
+                Sin datos del período @PeriodoTexto()@(_area is null ? "" : $" para {_area}").
+                Si es un período viejo, tocá "Sincronizar período".
+            </MudText>
+        </NoRecordsContent>
+        <HeaderContent>
+            <MudTh>Legajo</MudTh>
+            <MudTh>Empleado</MudTh>
+            <MudTh>Área</MudTh>
+            <MudTh Style="text-align:right;">Trab.</MudTh>
+            <MudTh Style="text-align:right;">Fer.</MudTh>
+            <MudTh Style="text-align:right;">Injust.</MudTh>
+            <MudTh Style="text-align:right;">Enferm.</MudTh>
+            <MudTh Style="text-align:right;">Especial</MudTh>
+            <MudTh Style="text-align:right;">Accid.</MudTh>
+            <MudTh Style="text-align:right;">Vacac.</MudTh>
+            <MudTh Style="text-align:right;">Hs noct.</MudTh>
+            <MudTh>PPP</MudTh>
+            <MudTh Style="text-align:right;">Total inas.</MudTh>
+            <MudTh Style="text-align:right;">Días liq.</MudTh>
+            <MudTh>Observación</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd>@(context.Legajo ?? "—")</MudTd>
+            <MudTd Style="white-space:nowrap;">@context.ApellidoNombre</MudTd>
+            <MudTd Style="white-space:nowrap;">@(context.Area ?? "—")</MudTd>
+            <MudTd Style="text-align:right;">@context.Trabajados</MudTd>
+            <MudTd Style="text-align:right;">@Cero(context.Feriados)</MudTd>
+            <MudTd Style="text-align:right;">@Cero(context.Injustificadas)</MudTd>
+            <MudTd Style="text-align:right;">@Cero(context.Enfermedad)</MudTd>
+            <MudTd Style="text-align:right;">@Cero(context.Especial + context.SinGoce + context.ConGoce)</MudTd>
+            <MudTd Style="text-align:right;">@Cero(context.Accidente)</MudTd>
+            <MudTd Style="text-align:right;">@Cero(context.Vacaciones)</MudTd>
+            <MudTd Style="text-align:right;">@Cero(context.HorasNocturnas)</MudTd>
+            <MudTd>
+                <MudChip T="string" Size="Size.Small" Color="@(context.Ppp == "Si" ? Color.Success : Color.Error)">@context.Ppp</MudChip>
+            </MudTd>
+            <MudTd Style="text-align:right;">@Cero(context.TotalInasistencia)</MudTd>
+            <MudTd Style="text-align:right;font-weight:600;">@context.TotalLiquidados</MudTd>
+            <MudTd>@(string.IsNullOrEmpty(context.Observacion) ? "—" : context.Observacion)</MudTd>
+        </RowTemplate>
+    </MudTable>
+</MudPaper>
+
+@code {
+    private int _mes;
+    private int _anio;
+    private string? _area;
+    private List<int> _anios = [];
+    private List<string> _areas = [];
+    private bool _loading = true;
+    private IReadOnlyList<PresentismoEmpleado> _filas = [];
+    private List<PresentismoEmpleado> _filtradas =>
+        _filas.Where(f => _area is null || f.Area == _area).ToList();
+
+    private bool _syncing;
+    private string _syncMsg = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var hoy = Reloj.Hoy;
+        _mes = hoy.Month;
+        _anio = hoy.Year;
+        _anios = Enumerable.Range(hoy.Year - 2, 3).Reverse().ToList();
+        await Cargar();
+    }
+
+    private async Task OnMesChanged(int m) { _mes = m; await Cargar(); }
+    private async Task OnAnioChanged(int a) { _anio = a; await Cargar(); }
+    private void OnAreaChanged(string? a) => _area = string.IsNullOrEmpty(a) ? null : a;
+
+    private async Task Cargar()
+    {
+        _loading = true;
+        try
+        {
+            _filas = await PresentismoSrv.ReporteMensualAsync(_anio, _mes);
+            _areas = _filas.Select(f => f.Area).Where(a => !string.IsNullOrWhiteSpace(a))
+                .Select(a => a!).Distinct().OrderBy(a => a).ToList();
+            if (_area is not null && !_areas.Contains(_area)) _area = null;
+        }
+        catch (Exception ex)
+        {
+            _filas = [];
+            Snackbar.Add($"Error al cargar: {ex.Message}", Severity.Error);
+        }
+        finally { _loading = false; }
+    }
+
+    private async Task ExportarExcel()
+    {
+        var bytes = await PresentismoSrv.ExcelMensualAsync(_anio, _mes, _area);
+        await JS.InvokeVoidAsync("downloadFile", $"presentismo_{_anio}-{_mes:00}.xlsx",
+            Convert.ToBase64String(bytes),
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    }
+
+    // Igual patrón que Nocturnidad: para períodos viejos sin datos, trae cada día desde Humand.
+    private async Task SincronizarPeriodo()
+    {
+        var (desde, hastaExcl) = NocturnidadService.PeriodoLiquidacion(_anio, _mes);
+        var hasta = hastaExcl.AddDays(-1);
+        if (hasta > Reloj.Hoy) hasta = Reloj.Hoy;
+        if (desde > Reloj.Hoy) { Snackbar.Add("Ese período todavía no empezó.", Severity.Warning); return; }
+
+        _syncing = true;
+        try
+        {
+            await Ingesta.SincronizarEmpleadosAsync();
+            int total = hasta.DayNumber - desde.DayNumber + 1, i = 0;
+            for (var f = desde; f <= hasta; f = f.AddDays(1))
+            {
+                _syncMsg = $"Sincronizando {++i}/{total}...";
+                StateHasChanged();
+                await Ingesta.SincronizarDiaAsync(f);
+            }
+            await Cargar();
+            Snackbar.Add($"Período sincronizado: {total} días desde Humand.", Severity.Success);
+        }
+        catch (Exception ex) { Snackbar.Add($"Error al sincronizar: {ex.Message}", Severity.Error); }
+        finally { _syncing = false; _syncMsg = string.Empty; }
+    }
+
+    private static string Cero(int v) => v == 0 ? "—" : v.ToString();
+
+    private static string NombreMes(int m) =>
+        System.Globalization.CultureInfo.GetCultureInfo("es-AR").DateTimeFormat.GetMonthName(m) is { } n
+            ? char.ToUpperInvariant(n[0]) + n[1..] : m.ToString();
+
+    private string PeriodoTexto()
+    {
+        var (desde, hasta) = NocturnidadService.PeriodoLiquidacion(_anio, _mes);
+        return $"{desde:dd/MM} al {hasta.AddDays(-1):dd/MM}";
+    }
+}

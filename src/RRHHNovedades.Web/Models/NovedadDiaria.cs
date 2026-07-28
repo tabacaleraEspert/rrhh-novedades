@@ -24,6 +24,9 @@ public class NovedadDiaria
     /// <summary>Motivo del permiso/licencia cuando aplica (ej. "Vacaciones", "Certificado médico").</summary>
     public string? MotivoNovedad { get; set; }
 
+    /// <summary>El día era feriado según Humand (array `holidays` del day-summary). Para presentismo.</summary>
+    public bool EsFeriado { get; set; }
+
     /// <summary>Última vez que se sincronizó/recalculó desde Humand.</summary>
     public DateTime ActualizadoUtc { get; set; }
 }

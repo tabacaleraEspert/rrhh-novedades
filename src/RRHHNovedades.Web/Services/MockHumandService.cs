@@ -16,8 +16,8 @@ public class MockHumandService : IHumandService
         new("EMP-006", "Sofía",  "Vega",      "+5491166666666", "Ventas"),
         new("EMP-007", "Carla",  "López",     "+5491177777777", "Ventas"),
         new("EMP-008", "Diego",  "Fernández", "+5491188888888", "Producción"),
-        new("EMP-009", "Nadia",  "Molina",    "+5491199999999", "Producción", "Turno C Noche"),
-        new("EMP-010", "Bruno",  "Acosta",    "+5491100000000", "Producción", "Turno C Noche"),
+        new("EMP-009", "Nadia",  "Molina",    "+5491199999999", "Producción", "Turno C Noche", "9001"),
+        new("EMP-010", "Bruno",  "Acosta",    "+5491100000000", "Producción", "Turno C Noche", "9002"),
     ];
 
     public Task<IReadOnlyList<EmpleadoHumand>> ObtenerEmpleadosAsync(CancellationToken ct = default) =>

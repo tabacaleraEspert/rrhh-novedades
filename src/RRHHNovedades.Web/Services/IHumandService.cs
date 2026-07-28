@@ -7,7 +7,8 @@ public record EmpleadoHumand(
     string Apellido,
     string? Telefono,
     string? Area,
-    string? SegTurno = null); // Ítem de la segmentación "Turno" (ej. "Turno C Noche"); null si no tiene.
+    string? SegTurno = null,  // Ítem de la segmentación "Turno" (ej. "Turno C Noche"); null si no tiene.
+    string? Legajo = null);   // Campo personalizado "Legajo" de Humand.
 
 /// <summary>Resumen de jornada de un empleado en un día (`/time-tracking/day-summaries`).</summary>
 public record JornadaHumand(
@@ -19,7 +20,8 @@ public record JornadaHumand(
     IReadOnlyList<string> PermisosDelDia,
     TimeOnly? HoraEntrada,
     TimeOnly? HoraSalida,
-    TimeOnly? InicioTeorico);
+    TimeOnly? InicioTeorico,
+    bool EsFeriado = false); // array `holidays` del day-summary no vacío
 
 /// <summary>
 /// Integración con Humand (plataforma de RRHH) — fuente de empleados y novedades de asistencia.

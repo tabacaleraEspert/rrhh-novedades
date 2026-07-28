@@ -2,6 +2,7 @@
 @attribute [Authorize]
 @rendermode InteractiveServer
 @inject INocturnidadService NocturnidadSrv
+@inject IIngestaService Ingesta
 @inject IReloj Reloj
 @inject IJSRuntime JS
 @inject ISnackbar Snackbar
@@ -42,8 +43,12 @@
                 <MudSelectItem T="int" Value="@a">@a</MudSelectItem>
             }
         </MudSelect>
-        <MudIconButton Icon="@Icons.Material.Filled.Download" Color="Color.Primary" OnClick="ExportarCsv"
-                       title="Exportar CSV" Disabled="@(_filtradas.Count == 0)" />
+        <MudButton Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.CloudSync"
+                   OnClick="SincronizarPeriodo" Disabled="_syncing" title="Trae de Humand los días del período elegido (para meses viejos sin datos)">
+            @(_syncing ? _syncMsg : "Sincronizar período")
+        </MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Filled.Download"
+                   OnClick="ExportarExcel" Disabled="@(_filtradas.Count == 0 || _syncing)">Excel</MudButton>
     </div>
 </div>
 
@@ -197,20 +202,43 @@
         _detVisible = true;
     }
 
-    private async Task ExportarCsv()
+    private async Task ExportarExcel()
     {
-        var sb = new System.Text.StringBuilder();
-        sb.AppendLine("Empleado;Area;Noches;HorasNocturnas");
-        foreach (var f in _filtradas)
-            sb.AppendLine(string.Join(";", Csv(f.ApellidoNombre), Csv(f.Area ?? ""), f.Noches, f.HorasNocturnas));
-
-        var bytes = System.Text.Encoding.UTF8.GetBytes("﻿" + sb); // BOM para Excel
-        await JS.InvokeVoidAsync("downloadFile", $"nocturnidad_{_anio}-{_mes:00}.csv",
-            Convert.ToBase64String(bytes), "text/csv");
+        var bytes = await NocturnidadSrv.ExcelMensualAsync(_anio, _mes, _area);
+        await JS.InvokeVoidAsync("downloadFile", $"nocturnidad_{_anio}-{_mes:00}.xlsx",
+            Convert.ToBase64String(bytes),
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     }
 
-    private static string Csv(string s) => s.Contains(';') || s.Contains('"')
-        ? "\"" + s.Replace("\"", "\"\"") + "\"" : s;
+    // Para períodos viejos sin datos locales: trae de Humand cada día del período (idempotente).
+    // No pasa de hoy (los días futuros no existen todavía).
+    private bool _syncing;
+    private string _syncMsg = string.Empty;
+
+    private async Task SincronizarPeriodo()
+    {
+        var (desde, hastaExcl) = NocturnidadService.PeriodoLiquidacion(_anio, _mes);
+        var hasta = hastaExcl.AddDays(-1);
+        if (hasta > Reloj.Hoy) hasta = Reloj.Hoy;
+        if (desde > Reloj.Hoy) { Snackbar.Add("Ese período todavía no empezó.", Severity.Warning); return; }
+
+        _syncing = true;
+        try
+        {
+            await Ingesta.SincronizarEmpleadosAsync();
+            int total = hasta.DayNumber - desde.DayNumber + 1, i = 0;
+            for (var f = desde; f <= hasta; f = f.AddDays(1))
+            {
+                _syncMsg = $"Sincronizando {++i}/{total}...";
+                StateHasChanged();
+                await Ingesta.SincronizarDiaAsync(f);
+            }
+            await Cargar();
+            Snackbar.Add($"Período sincronizado: {total} días desde Humand.", Severity.Success);
+        }
+        catch (Exception ex) { Snackbar.Add($"Error al sincronizar: {ex.Message}", Severity.Error); }
+        finally { _syncing = false; _syncMsg = string.Empty; }
+    }
 
     private static string NombreMes(int m) =>
         System.Globalization.CultureInfo.GetCultureInfo("es-AR").DateTimeFormat.GetMonthName(m) is { } n

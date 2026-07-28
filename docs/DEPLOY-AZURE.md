@@ -120,9 +120,17 @@ existente; sin la columna, cualquier SELECT de `ConfiguracionParte` falla):
 ALTER TABLE "ConfiguracionParte" ADD COLUMN IF NOT EXISTS "HoraParteNoche" character varying(5) NOT NULL DEFAULT '06:00';
 ```
 
-Como la DB no tiene acceso público, el DDL se ejecuta con un Container Apps Job efímero dentro
-del entorno: `bash infra/alter-noche.sh` (idempotente; requiere `az login` con permisos en
-`rg-rrhh-prod`; el password sale de Key Vault vía Managed Identity y nunca toca la máquina local).
+Como la DB no tiene acceso público, todo DDL manual se ejecuta con un Container Apps Job efímero
+dentro del entorno: `bash infra/run-ddl.sh '<SQL>'` (usar SQL idempotente; requiere `az login` con
+permisos en `rg-rrhh-prod`; el password sale de Key Vault vía Managed Identity y nunca toca la
+máquina local). Aplicados a la fecha:
+
+```sql
+-- 27-jul-2026 (turno noche) — APLICADO
+ALTER TABLE "ConfiguracionParte" ADD COLUMN IF NOT EXISTS "HoraParteNoche" character varying(5) NOT NULL DEFAULT '06:00';
+-- 28-jul-2026 (legajo en Excel de nocturnidad) — correr antes del deploy correspondiente
+ALTER TABLE "Empleados" ADD COLUMN IF NOT EXISTS "Legajo" character varying(20);
+```
 
 El parte de noche sale a las 06:00 y reporta la jornada del día anterior. Los empleados nocturnos
 se detectan por la segmentación **"Turno"** de Humand (ítem que contenga "Noche", ej. "Turno C Noche").

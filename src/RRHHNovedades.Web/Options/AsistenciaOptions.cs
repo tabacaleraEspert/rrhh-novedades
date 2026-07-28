@@ -27,4 +27,10 @@ public class AsistenciaOptions
     /// antes de cada parte. Configurable; default 2 veces por día.
     /// </summary>
     public List<string> AutoSyncHoras { get; set; } = ["10:30", "16:30"];
+
+    /// <summary>
+    /// Feriados (yyyy-MM-dd) para presentismo. Se SUMAN a los que marque Humand (`holidays`),
+    /// que hoy la empresa no tiene cargados. Mantener por año en appsettings.
+    /// </summary>
+    public List<string> Feriados { get; set; } = [];
 }

@@ -43,6 +43,7 @@ public class IngestaService(
             emp.Apellido = r.Apellido;
             emp.Telefono = r.Telefono;
             emp.Area = r.Area;
+            emp.Legajo = r.Legajo;
             emp.Activo = true;
 
             // Turno noche: lo define la segmentación "Turno" de Humand (ej. "Turno C Noche"),
@@ -76,6 +77,7 @@ public class IngestaService(
             .ToDictionaryAsync(n => n.EmpleadoId, ct);
 
         var corte = ParseTime(_opt.CorteTurnoTarde) ?? new TimeOnly(13, 0);
+        var feriadosCfg = FeriadosConfigurados(_opt.Feriados);
         int n = 0;
 
         foreach (var j in jornadas)
@@ -96,6 +98,8 @@ public class IngestaService(
             nov.HoraEntrada = j.HoraEntrada;
             nov.HoraSalida = j.HoraSalida;
             nov.MotivoNovedad = motivo;
+            // Feriado: lo que marque Humand (hoy no cargan el calendario) + la lista de appsettings.
+            nov.EsFeriado = j.EsFeriado || feriadosCfg.Contains(fecha);
             nov.ActualizadoUtc = DateTime.UtcNow;
             n++;
         }
@@ -168,4 +172,9 @@ public class IngestaService(
         segTurno?.Contains("noche", StringComparison.OrdinalIgnoreCase) == true;
 
     private static TimeOnly? ParseTime(string? s) => TimeOnly.TryParse(s, out var t) ? t : null;
+
+    // internal para testear (InternalsVisibleTo RRHHNovedades.Tests).
+    internal static HashSet<DateOnly> FeriadosConfigurados(IEnumerable<string>? fechas) =>
+        (fechas ?? []).Select(f => DateOnly.TryParse(f, out var d) ? d : (DateOnly?)null)
+                      .Where(d => d is not null).Select(d => d!.Value).ToHashSet();
 }

@@ -35,6 +35,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IIngestaService, IngestaService>();
         services.AddScoped<IParteService, ParteService>();
         services.AddScoped<INocturnidadService, NocturnidadService>();
+        services.AddScoped<IPresentismoService, PresentismoService>();
         services.AddScoped<ISsoTicketService, SsoTicketService>();
         services.AddMemoryCache();
 

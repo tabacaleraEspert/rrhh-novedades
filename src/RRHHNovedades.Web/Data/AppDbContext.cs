@@ -33,6 +33,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.Property(x => x.Apellido).HasMaxLength(120);
             e.Property(x => x.Telefono).HasMaxLength(40);
             e.Property(x => x.Area).HasMaxLength(120);
+            e.Property(x => x.Legajo).HasMaxLength(20);
         });
 
         modelBuilder.Entity<NovedadDiaria>(e =>

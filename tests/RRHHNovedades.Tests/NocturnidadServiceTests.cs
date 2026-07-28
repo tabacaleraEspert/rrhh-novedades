@@ -102,7 +102,7 @@ public class NocturnidadServiceTests
         var factory = new InMemoryFactory(db);
         await using var ctx = factory.CreateDbContext();
         ctx.Empleados.AddRange(
-            new Empleado { Id = 1, Nombre = "Nadia", Apellido = "Molina", Area = "Producción", EmployeeInternalId = "1", Turno = Turno.Noche },
+            new Empleado { Id = 1, Nombre = "Nadia", Apellido = "Molina", Area = "Producción", EmployeeInternalId = "1", Turno = Turno.Noche, Legajo = "1262" },
             new Empleado { Id = 2, Nombre = "Sofía", Apellido = "Vega", Area = "Ventas", EmployeeInternalId = "2" });
         ctx.Novedades.AddRange(
             // Molina: 3 noches dentro del período de JULIO (26-jun → 25-jul inclusive),
@@ -155,6 +155,26 @@ public class NocturnidadServiceTests
         var molina = Assert.Single(agosto);
         Assert.Equal(1, molina.Noches); // la del 26-jul
         Assert.Equal(8, molina.HorasNocturnas);
+    }
+
+    [Fact]
+    public async Task Excel_del_periodo_trae_resumen_con_totales_y_detalle_por_noche()
+    {
+        var svc = await SetupMesAsync(nameof(Excel_del_periodo_trae_resumen_con_totales_y_detalle_por_noche));
+        var bytes = await svc.ExcelMensualAsync(2026, 7);
+
+        using var ms = new MemoryStream(bytes);
+        using var wb = new ClosedXML.Excel.XLWorkbook(ms);
+        var res = wb.Worksheet("Resumen");
+        Assert.Equal("1262", res.Cell(5, 1).GetString());          // legajo
+        Assert.Equal("Molina, Nadia", res.Cell(5, 2).GetString()); // ordenado por apellido
+        Assert.Equal(3, res.Cell(5, 4).GetValue<int>());           // noches del período
+        Assert.Equal(25, res.Cell(5, 5).GetValue<int>());          // 8+8+9
+        Assert.Equal("Vega, Sofía", res.Cell(6, 2).GetString());
+        Assert.Equal("—", res.Cell(6, 1).GetString());             // sin legajo cargado
+        var det = wb.Worksheet("Detalle");
+        Assert.Equal(4, det.RowsUsed().Count() - 1);               // 3 noches Molina + 1 Vega (sin cabecera)
+        Assert.Equal("1262", det.Cell(2, 1).GetString());
     }
 
     [Fact]

@@ -12,6 +12,9 @@ public class Empleado
     public string? Telefono { get; set; }
     public string? Area { get; set; }
 
+    /// <summary>Número de legajo (campo personalizado "Legajo" de Humand).</summary>
+    public string? Legajo { get; set; }
+
     /// <summary>Turno principal del empleado. Puede inferirse del horario del día en la ingesta.</summary>
     public Turno Turno { get; set; } = Turno.Manana;
 

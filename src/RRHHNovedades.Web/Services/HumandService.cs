@@ -52,7 +52,8 @@ public class HumandService : IHumandService
                     Str(u, "lastName") ?? string.Empty,
                     Str(u, "phoneNumber") ?? Str(u, "phone"),
                     Segmentacion(u, "Sector"),
-                    Segmentacion(u, "Turno")));
+                    Segmentacion(u, "Turno"),
+                    CampoPersonalizado(u, "Legajo")));
             }
 
             if (users.GetArrayLength() < PageLimit) break;
@@ -119,6 +120,9 @@ public class HumandService : IHumandService
         if (it.TryGetProperty("timeSlots", out var slots) && slots.ValueKind == JsonValueKind.Array && slots.GetArrayLength() > 0)
             inicioTeorico = ParseTime(Str(slots[0], "startTime"));
 
+        bool esFeriado = it.TryGetProperty("holidays", out var hol)
+            && hol.ValueKind == JsonValueKind.Array && hol.GetArrayLength() > 0;
+
         return new JornadaHumand(
             Str(it, "employeeId") ?? string.Empty,
             ParseDate(Str(it, "referenceDate")) ?? fechaDefault,
@@ -126,7 +130,8 @@ public class HumandService : IHumandService
             Bool(it, "hasSchedule", true),
             incidences,
             permisos,
-            entrada, salida, inicioTeorico);
+            entrada, salida, inicioTeorico,
+            esFeriado);
     }
 
     private async Task<string> GetAsync(string path, CancellationToken ct)
@@ -157,6 +162,17 @@ public class HumandService : IHumandService
             foreach (var s in segs.EnumerateArray())
                 if (string.Equals(Str(s, "group"), group, StringComparison.OrdinalIgnoreCase))
                     return Str(s, "item");
+        return null;
+    }
+
+    // Lee un campo personalizado por nombre (array `fields`; el value puede venir como número).
+    private static string? CampoPersonalizado(JsonElement u, string nombre)
+    {
+        if (u.TryGetProperty("fields", out var fs) && fs.ValueKind == JsonValueKind.Array)
+            foreach (var f in fs.EnumerateArray())
+                if (string.Equals(Str(f, "name"), nombre, StringComparison.OrdinalIgnoreCase)
+                    && f.TryGetProperty("value", out var v) && v.ValueKind is not JsonValueKind.Null)
+                    return v.ValueKind == JsonValueKind.String ? v.GetString() : v.GetRawText();
         return null;
     }
 
