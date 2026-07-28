@@ -10,6 +10,9 @@ public interface IIngestaService
 {
     Task<int> SincronizarEmpleadosAsync(CancellationToken ct = default);
     Task<int> SincronizarDiaAsync(DateOnly fecha, CancellationToken ct = default);
+
+    /// <summary>Sincroniza SOLO un empleado en una fecha (1 llamada a Humand; para correcciones puntuales).</summary>
+    Task<int> SincronizarEmpleadoDiaAsync(int empleadoId, DateOnly fecha, CancellationToken ct = default);
 }
 
 /// <summary>
@@ -59,10 +62,18 @@ public class IngestaService(
         return remotos.Count;
     }
 
-    public async Task<int> SincronizarDiaAsync(DateOnly fecha, CancellationToken ct = default)
+    public Task<int> SincronizarDiaAsync(DateOnly fecha, CancellationToken ct = default) =>
+        SincronizarDiaCoreAsync(fecha, soloEmpleadoId: null, ct);
+
+    public Task<int> SincronizarEmpleadoDiaAsync(int empleadoId, DateOnly fecha, CancellationToken ct = default) =>
+        SincronizarDiaCoreAsync(fecha, empleadoId, ct);
+
+    private async Task<int> SincronizarDiaCoreAsync(DateOnly fecha, int? soloEmpleadoId, CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
-        var empleados = await db.Empleados.Where(e => e.Activo).ToListAsync(ct);
+        var empleados = await db.Empleados
+            .Where(e => e.Activo && (soloEmpleadoId == null || e.Id == soloEmpleadoId))
+            .ToListAsync(ct);
         if (empleados.Count == 0)
         {
             logger.LogWarning("Ingesta: no hay empleados; correr SincronizarEmpleados primero");
@@ -78,6 +89,17 @@ public class IngestaService(
 
         var corte = ParseTime(_opt.CorteTurnoTarde) ?? new TimeOnly(13, 0);
         var feriadosCfg = FeriadosConfigurados(_opt.Feriados);
+
+        // "Fichadores": empleados con alguna fichada en los últimos 30 días. Los que NUNCA fichan
+        // (ventas, oficinas, dirección) no tienen horario en Humand y caerían como Franco todos
+        // los días; para ellos, un día hábil sin feriado cuenta como Presente (regla RRHH 28-jul-2026).
+        // Los fichadores conservan sus francos rotativos.
+        var fichadores = (await db.Novedades
+            .Where(x => x.Fecha < fecha && x.Fecha >= fecha.AddDays(-30) && x.HoraEntrada != null)
+            .Select(x => x.EmpleadoId)
+            .Distinct()
+            .ToListAsync(ct)).ToHashSet();
+
         int n = 0;
 
         foreach (var j in jornadas)
@@ -85,6 +107,9 @@ public class IngestaService(
             if (!porId.TryGetValue(j.EmployeeInternalId, out var emp)) continue;
 
             var (estado, motivo, minTarde) = Clasificar(j, reloj.Ahora);
+            if (estado == EstadoJornada.FrancoNoLaborable
+                && EsPresentePorNoFichaje(fecha, j, feriadosCfg, esFichador: fichadores.Contains(emp.Id)))
+                estado = EstadoJornada.Presente;
             var turno = InferirTurno(j, emp, corte);
 
             if (!existentes.TryGetValue(emp.Id, out var nov))
@@ -166,6 +191,17 @@ public class IngestaService(
         if (inicio is { } i) return i >= corte ? Turno.Tarde : Turno.Manana;
         return emp.Turno;
     }
+
+    /// <summary>
+    /// Un "Franco" de alguien que no ficha nunca, en día hábil (lun-vie) no feriado, se considera
+    /// Presente: son puestos sin fichaje (ventas, oficinas), no descanso.
+    /// internal para testear (InternalsVisibleTo RRHHNovedades.Tests).
+    /// </summary>
+    internal static bool EsPresentePorNoFichaje(DateOnly fecha, JornadaHumand j, HashSet<DateOnly> feriadosCfg, bool esFichador) =>
+        !esFichador
+        && fecha.DayOfWeek is not (DayOfWeek.Saturday or DayOfWeek.Sunday)
+        && !j.EsFeriado
+        && !feriadosCfg.Contains(fecha);
 
     // internal para testearla (InternalsVisibleTo RRHHNovedades.Tests).
     internal static bool EsSegmentacionNocturna(string? segTurno) =>
