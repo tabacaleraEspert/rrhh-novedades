@@ -1,3 +1,6 @@
+using Microsoft.EntityFrameworkCore;
+using RRHHNovedades.Web.Data;
+using RRHHNovedades.Web.Models;
 using RRHHNovedades.Web.Services;
 using Xunit;
 
@@ -80,5 +83,91 @@ public class NocturnidadServiceTests
         var min = NocturnidadService.MinutosNocturnos(T(21, 10), T(5, 56));
         Assert.Equal(8 * 60 + 46, min);
         Assert.Equal(9, NocturnidadService.HorasRedondeadas(min));
+    }
+
+    // ── Reporte mensual y desglose (DB en memoria) ──
+
+    private sealed class InMemoryFactory(string dbName) : IDbContextFactory<AppDbContext>
+    {
+        public AppDbContext CreateDbContext()
+        {
+            var opt = new DbContextOptionsBuilder<AppDbContext>()
+                .UseInMemoryDatabase(dbName).Options;
+            return new AppDbContext(opt);
+        }
+    }
+
+    private static async Task<NocturnidadService> SetupMesAsync(string db)
+    {
+        var factory = new InMemoryFactory(db);
+        await using var ctx = factory.CreateDbContext();
+        ctx.Empleados.AddRange(
+            new Empleado { Id = 1, Nombre = "Nadia", Apellido = "Molina", Area = "Producción", EmployeeInternalId = "1", Turno = Turno.Noche },
+            new Empleado { Id = 2, Nombre = "Sofía", Apellido = "Vega", Area = "Ventas", EmployeeInternalId = "2" });
+        ctx.Novedades.AddRange(
+            // Molina: 3 noches dentro del período de JULIO (26-jun → 25-jul inclusive),
+            // 1 sin salida (no computable) y 1 del 26-jul (ya pertenece a AGOSTO).
+            new NovedadDiaria { EmpleadoId = 1, Fecha = new(2026, 6, 26), HoraEntrada = T(22), HoraSalida = T(6) },     // borde: entra en julio
+            new NovedadDiaria { EmpleadoId = 1, Fecha = new(2026, 7, 1), HoraEntrada = T(22), HoraSalida = T(6) },
+            new NovedadDiaria { EmpleadoId = 1, Fecha = new(2026, 7, 2), HoraEntrada = T(21, 10), HoraSalida = T(5, 56) },
+            new NovedadDiaria { EmpleadoId = 1, Fecha = new(2026, 7, 3), HoraEntrada = T(22), HoraSalida = null },
+            new NovedadDiaria { EmpleadoId = 1, Fecha = new(2026, 7, 26), HoraEntrada = T(22), HoraSalida = T(6) },     // borde: ya es agosto
+            // Vega: turno tarde que pisa 1 h la banda.
+            new NovedadDiaria { EmpleadoId = 2, Fecha = new(2026, 7, 10), HoraEntrada = T(14), HoraSalida = T(22) },
+            // Diurno puro: no aparece.
+            new NovedadDiaria { EmpleadoId = 2, Fecha = new(2026, 7, 11), HoraEntrada = T(8), HoraSalida = T(17) });
+        await ctx.SaveChangesAsync();
+        return new NocturnidadService(factory);
+    }
+
+    [Theory]
+    [InlineData(2026, 7, "2026-06-26", "2026-07-26")]  // julio = 26-jun → 25-jul inclusive
+    [InlineData(2026, 1, "2025-12-26", "2026-01-26")]  // enero cruza el año
+    [InlineData(2026, 12, "2026-11-26", "2026-12-26")]
+    public void Periodo_de_liquidacion_va_del_26_anterior_al_25_inclusive(int anio, int mes, string desde, string hastaExcl)
+    {
+        var (d, h) = NocturnidadService.PeriodoLiquidacion(anio, mes);
+        Assert.Equal(DateOnly.Parse(desde), d);
+        Assert.Equal(DateOnly.Parse(hastaExcl), h); // exclusivo ⇒ incluye hasta el 25
+    }
+
+    [Fact]
+    public async Task Reporte_mensual_acumula_por_empleado_solo_el_periodo_de_liquidacion()
+    {
+        var svc = await SetupMesAsync(nameof(Reporte_mensual_acumula_por_empleado_solo_el_periodo_de_liquidacion));
+        var filas = await svc.ReporteMensualAsync(2026, 7);
+
+        Assert.Equal(2, filas.Count);
+        var molina = filas.Single(f => f.ApellidoNombre.StartsWith("Molina"));
+        Assert.Equal(3, molina.Noches);               // 26-jun entra; la sin salida y la del 26-jul no
+        Assert.Equal(8 + 8 + 9, molina.HorasNocturnas); // 8h + 8h + 8h46 redondeada a 9
+        var vega = filas.Single(f => f.ApellidoNombre.StartsWith("Vega"));
+        Assert.Equal(1, vega.Noches);
+        Assert.Equal(1, vega.HorasNocturnas);
+    }
+
+    [Fact]
+    public async Task La_noche_del_26_pasa_al_mes_siguiente()
+    {
+        var svc = await SetupMesAsync(nameof(La_noche_del_26_pasa_al_mes_siguiente));
+        var agosto = await svc.ReporteMensualAsync(2026, 8);
+
+        var molina = Assert.Single(agosto);
+        Assert.Equal(1, molina.Noches); // la del 26-jul
+        Assert.Equal(8, molina.HorasNocturnas);
+    }
+
+    [Fact]
+    public async Task Detalle_mensual_lista_cada_noche_con_sus_horas()
+    {
+        var svc = await SetupMesAsync(nameof(Detalle_mensual_lista_cada_noche_con_sus_horas));
+        var noches = await svc.DetalleMensualAsync(1, 2026, 7);
+
+        Assert.Equal(3, noches.Count);
+        Assert.Equal(new DateOnly(2026, 6, 26), noches[0].Fecha);
+        Assert.Equal(new DateOnly(2026, 7, 1), noches[1].Fecha);
+        Assert.Equal(8, noches[1].Horas);
+        Assert.Equal(new DateOnly(2026, 7, 2), noches[2].Fecha);
+        Assert.Equal(9, noches[2].Horas);
     }
 }

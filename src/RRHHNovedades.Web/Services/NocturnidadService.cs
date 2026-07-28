@@ -5,15 +5,30 @@ namespace RRHHNovedades.Web.Services;
 
 /// <summary>Fila del reporte mensual de nocturnidad de un empleado.</summary>
 public record NocturnidadEmpleado(
+    int EmpleadoId,
     string ApellidoNombre,
     string? Area,
     int Noches,
     int HorasNocturnas);
 
+/// <summary>Una noche puntual del desglose por empleado.</summary>
+public record NocturnidadNoche(
+    DateOnly Fecha,
+    TimeOnly Entrada,
+    TimeOnly Salida,
+    int Minutos,
+    int Horas);
+
 public interface INocturnidadService
 {
-    /// <summary>Reporte mensual: horas trabajadas en la banda nocturna (21:00–06:00) por empleado.</summary>
+    /// <summary>
+    /// Reporte del mes de liquidación: horas en banda nocturna (21:00–06:00) por empleado.
+    /// El "mes" va del 26 del mes anterior al 25 del elegido, inclusive.
+    /// </summary>
     Task<IReadOnlyList<NocturnidadEmpleado>> ReporteMensualAsync(int anio, int mes, CancellationToken ct = default);
+
+    /// <summary>Desglose noche por noche de un empleado en el mes de liquidación (solo noches con minutos > 0).</summary>
+    Task<IReadOnlyList<NocturnidadNoche>> DetalleMensualAsync(int empleadoId, int anio, int mes, CancellationToken ct = default);
 }
 
 /// <summary>
@@ -26,10 +41,20 @@ public class NocturnidadService(IDbContextFactory<AppDbContext> dbFactory) : INo
     private static readonly TimeOnly InicioBanda = new(21, 0);
     private static readonly TimeOnly FinBanda = new(6, 0);
 
+    /// <summary>
+    /// Período de liquidación del mes: del 26 del mes ANTERIOR al 25 del mes elegido, inclusive
+    /// (así se liquidan las novedades en Espert). Devuelve [desde, hasta) con hasta exclusivo.
+    /// internal para testear (InternalsVisibleTo RRHHNovedades.Tests).
+    /// </summary>
+    internal static (DateOnly Desde, DateOnly Hasta) PeriodoLiquidacion(int anio, int mes)
+    {
+        var hasta = new DateOnly(anio, mes, 26);       // exclusivo ⇒ incluye hasta el 25
+        return (hasta.AddMonths(-1), hasta);
+    }
+
     public async Task<IReadOnlyList<NocturnidadEmpleado>> ReporteMensualAsync(int anio, int mes, CancellationToken ct = default)
     {
-        var desde = new DateOnly(anio, mes, 1);
-        var hasta = desde.AddMonths(1);
+        var (desde, hasta) = PeriodoLiquidacion(anio, mes);
 
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var novedades = await db.Novedades
@@ -42,12 +67,33 @@ public class NocturnidadService(IDbContextFactory<AppDbContext> dbFactory) : INo
             .Where(x => x.Minutos > 0)
             .GroupBy(x => x.Empleado.Id)
             .Select(g => new NocturnidadEmpleado(
+                g.Key,
                 g.First().Empleado.ApellidoNombre,
                 g.First().Empleado.Area,
                 Noches: g.Count(),
                 HorasNocturnas: g.Sum(x => HorasRedondeadas(x.Minutos))))
             .OrderByDescending(r => r.HorasNocturnas)
             .ThenBy(r => r.ApellidoNombre)
+            .ToList();
+    }
+
+    public async Task<IReadOnlyList<NocturnidadNoche>> DetalleMensualAsync(int empleadoId, int anio, int mes, CancellationToken ct = default)
+    {
+        var (desde, hasta) = PeriodoLiquidacion(anio, mes);
+
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var novedades = await db.Novedades
+            .Where(n => n.EmpleadoId == empleadoId && n.Fecha >= desde && n.Fecha < hasta
+                     && n.HoraEntrada != null && n.HoraSalida != null)
+            .OrderBy(n => n.Fecha)
+            .ToListAsync(ct);
+
+        return novedades
+            .Select(n => new NocturnidadNoche(
+                n.Fecha, n.HoraEntrada!.Value, n.HoraSalida!.Value,
+                Minutos: MinutosNocturnos(n.HoraEntrada!.Value, n.HoraSalida),
+                Horas: HorasRedondeadas(MinutosNocturnos(n.HoraEntrada!.Value, n.HoraSalida))))
+            .Where(x => x.Minutos > 0)
             .ToList();
     }
 

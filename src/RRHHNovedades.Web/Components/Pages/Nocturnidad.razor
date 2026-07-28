@@ -13,11 +13,20 @@
     <div>
         <MudText Typo="Typo.h5" Style="font-weight:600;">Nocturnidad</MudText>
         <MudText Typo="Typo.body2" Color="Color.Secondary">
-            Horas trabajadas entre las 21:00 y las 06:00 según las fichadas, por mes. Cada noche se
-            redondea hacia arriba a la hora completa a partir de los 45 minutos.
+            Horas trabajadas entre las 21:00 y las 06:00 según las <b>fichadas reales</b> (no el horario
+            programado). El mes es el <b>período de liquidación</b>: @PeriodoTexto(). Cada noche se
+            redondea hacia arriba a la hora completa a partir de los 45 minutos. Clic en una fila para
+            ver el detalle noche por noche.
         </MudText>
     </div>
     <div class="d-flex align-center gap-2 flex-wrap">
+        <MudSelect T="string" Label="Área" Value="_area" ValueChanged="OnAreaChanged" Clearable="true"
+                   Style="min-width:180px;" Margin="Margin.Dense" Dense="true">
+            @foreach (var a in _areas)
+            {
+                <MudSelectItem T="string" Value="@a">@a</MudSelectItem>
+            }
+        </MudSelect>
         <MudSelect T="int" Label="Mes" Value="_mes" ValueChanged="OnMesChanged" Style="min-width:140px;"
                    Margin="Margin.Dense" Dense="true">
             @for (int m = 1; m <= 12; m++)
@@ -34,14 +43,46 @@
             }
         </MudSelect>
         <MudIconButton Icon="@Icons.Material.Filled.Download" Color="Color.Primary" OnClick="ExportarCsv"
-                       title="Exportar CSV" Disabled="@(_filas.Count == 0)" />
+                       title="Exportar CSV" Disabled="@(_filtradas.Count == 0)" />
     </div>
 </div>
 
+<MudGrid Class="mt-1" Spacing="2">
+    <MudItem xs="12" sm="4">
+        <MudPaper Class="pa-4" Elevation="1">
+            <div class="d-flex align-center justify-space-between">
+                <MudText Typo="Typo.overline" Color="Color.Secondary">Horas nocturnas (total)</MudText>
+                <MudIcon Icon="@Icons.Material.Filled.NightsStay" Color="Color.Primary" Size="Size.Small" />
+            </div>
+            <MudText Typo="Typo.h4" Style="font-weight:600;">@_filtradas.Sum(f => f.HorasNocturnas)</MudText>
+            <MudText Typo="Typo.caption" Color="Color.Secondary">@(_area ?? "todas las áreas") · @PeriodoTexto()</MudText>
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="6" sm="4">
+        <MudPaper Class="pa-4" Elevation="1">
+            <div class="d-flex align-center justify-space-between">
+                <MudText Typo="Typo.overline" Color="Color.Secondary">Noches</MudText>
+                <MudIcon Icon="@Icons.Material.Filled.DarkMode" Color="Color.Primary" Size="Size.Small" />
+            </div>
+            <MudText Typo="Typo.h4" Style="font-weight:600;">@_filtradas.Sum(f => f.Noches)</MudText>
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="6" sm="4">
+        <MudPaper Class="pa-4" Elevation="1">
+            <div class="d-flex align-center justify-space-between">
+                <MudText Typo="Typo.overline" Color="Color.Secondary">Empleados</MudText>
+                <MudIcon Icon="@Icons.Material.Filled.People" Color="Color.Primary" Size="Size.Small" />
+            </div>
+            <MudText Typo="Typo.h4" Style="font-weight:600;">@_filtradas.Count</MudText>
+        </MudPaper>
+    </MudItem>
+</MudGrid>
+
 <MudPaper Class="mt-3" Elevation="1">
-    <MudTable T="NocturnidadEmpleado" Items="_filas" Dense="true" Hover="true" Loading="_loading" Breakpoint="Breakpoint.Sm">
+    <MudTable T="NocturnidadEmpleado" Items="_filtradas" Dense="true" Hover="true" Loading="_loading" Breakpoint="Breakpoint.Sm"
+              OnRowClick="@(args => AbrirDetalle(args.Item))" RowClass="cursor-pointer">
         <NoRecordsContent>
-            <MudText>Sin horas nocturnas registradas en @NombreMes(_mes) @_anio.</MudText>
+            <MudText>Sin horas nocturnas registradas en @NombreMes(_mes) @_anio@(_area is null ? "" : $" para {_area}").</MudText>
         </NoRecordsContent>
         <HeaderContent>
             <MudTh>Empleado</MudTh>
@@ -58,12 +99,64 @@
     </MudTable>
 </MudPaper>
 
+<MudDialog @bind-Visible="_detVisible" Options="_dlgOpts">
+    <TitleContent>
+        <MudText Typo="Typo.h6">@_detNombre — @NombreMes(_mes) @_anio</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudSimpleTable Dense="true">
+            <thead>
+                <tr>
+                    <th style="text-align:left;">Fecha</th><th>Entrada</th><th>Salida</th>
+                    <th style="text-align:right;">Min. nocturnos</th><th style="text-align:right;">Horas</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var d in _detNoches)
+                {
+                    <tr>
+                        <td>@d.Fecha.ToString("ddd dd/MM")</td>
+                        <td style="text-align:center;">@d.Entrada.ToString("HH:mm")</td>
+                        <td style="text-align:center;">@d.Salida.ToString("HH:mm")</td>
+                        <td style="text-align:right;">@d.Minutos</td>
+                        <td style="text-align:right;font-weight:600;">@d.Horas</td>
+                    </tr>
+                }
+            </tbody>
+            <tfoot>
+                <tr style="border-top:2px solid var(--mud-palette-lines-default);">
+                    <td style="font-weight:600;">Total (@_detNoches.Count noches)</td>
+                    <td></td><td></td>
+                    <td style="text-align:right;font-weight:600;">@_detNoches.Sum(x => x.Minutos)</td>
+                    <td style="text-align:right;font-weight:600;">@_detNoches.Sum(x => x.Horas)</td>
+                </tr>
+            </tfoot>
+        </MudSimpleTable>
+        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-2 d-block">
+            Entrada y salida son las fichadas reales. Las horas se redondean por noche (≥ 45 min ⇒ hora completa).
+        </MudText>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => _detVisible = false)">Cerrar</MudButton>
+    </DialogActions>
+</MudDialog>
+
 @code {
     private int _mes;
     private int _anio;
+    private string? _area;
     private List<int> _anios = [];
+    private List<string> _areas = [];
     private bool _loading = true;
     private IReadOnlyList<NocturnidadEmpleado> _filas = [];
+    private List<NocturnidadEmpleado> _filtradas =>
+        _filas.Where(f => _area is null || f.Area == _area).ToList();
+
+    // Detalle por empleado
+    private bool _detVisible;
+    private string _detNombre = string.Empty;
+    private IReadOnlyList<NocturnidadNoche> _detNoches = [];
+    private readonly DialogOptions _dlgOpts = new() { MaxWidth = MaxWidth.Small, FullWidth = true, CloseOnEscapeKey = true };
 
     protected override async Task OnInitializedAsync()
     {
@@ -76,11 +169,18 @@
 
     private async Task OnMesChanged(int m) { _mes = m; await Cargar(); }
     private async Task OnAnioChanged(int a) { _anio = a; await Cargar(); }
+    private void OnAreaChanged(string? a) => _area = string.IsNullOrEmpty(a) ? null : a;
 
     private async Task Cargar()
     {
         _loading = true;
-        try { _filas = await NocturnidadSrv.ReporteMensualAsync(_anio, _mes); }
+        try
+        {
+            _filas = await NocturnidadSrv.ReporteMensualAsync(_anio, _mes);
+            _areas = _filas.Select(f => f.Area).Where(a => !string.IsNullOrWhiteSpace(a))
+                .Select(a => a!).Distinct().OrderBy(a => a).ToList();
+            if (_area is not null && !_areas.Contains(_area)) _area = null;
+        }
         catch (Exception ex)
         {
             _filas = [];
@@ -89,11 +189,19 @@
         finally { _loading = false; }
     }
 
+    private async Task AbrirDetalle(NocturnidadEmpleado? f)
+    {
+        if (f is null) return;
+        _detNoches = await NocturnidadSrv.DetalleMensualAsync(f.EmpleadoId, _anio, _mes);
+        _detNombre = f.ApellidoNombre;
+        _detVisible = true;
+    }
+
     private async Task ExportarCsv()
     {
         var sb = new System.Text.StringBuilder();
         sb.AppendLine("Empleado;Area;Noches;HorasNocturnas");
-        foreach (var f in _filas)
+        foreach (var f in _filtradas)
             sb.AppendLine(string.Join(";", Csv(f.ApellidoNombre), Csv(f.Area ?? ""), f.Noches, f.HorasNocturnas));
 
         var bytes = System.Text.Encoding.UTF8.GetBytes("﻿" + sb); // BOM para Excel
@@ -107,4 +215,11 @@
     private static string NombreMes(int m) =>
         System.Globalization.CultureInfo.GetCultureInfo("es-AR").DateTimeFormat.GetMonthName(m) is { } n
             ? char.ToUpperInvariant(n[0]) + n[1..] : m.ToString();
+
+    // Período de liquidación del mes elegido (26 del anterior al 25, como liquida Espert).
+    private string PeriodoTexto()
+    {
+        var (desde, hasta) = NocturnidadService.PeriodoLiquidacion(_anio, _mes);
+        return $"{desde:dd/MM} al {hasta.AddDays(-1):dd/MM}";
+    }
 }
