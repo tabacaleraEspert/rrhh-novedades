@@ -19,7 +19,7 @@
         <MudPaper Class="pa-4" Elevation="1">
             <MudText Typo="Typo.subtitle1" Class="mb-2" Style="font-weight:600;">Destinatarios del parte</MudText>
             <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">
-                Listado de teléfonos a los que el bot envía los 2 partes diarios. Formato E.164 (ej. +5491122334455).
+                Listado de teléfonos a los que el bot envía los partes diarios. Formato E.164 (ej. +5491122334455).
             </MudText>
 
             <div class="d-flex gap-2 mb-3 flex-wrap align-center">
@@ -58,9 +58,13 @@
             <div class="d-flex gap-2 flex-wrap align-center mb-2">
                 <MudTextField @bind-Value="_horaManana" Label="Parte mañana (HH:mm)" Style="max-width:160px;" Margin="Margin.Dense" />
                 <MudTextField @bind-Value="_horaTarde" Label="Parte tarde (HH:mm)" Style="max-width:160px;" Margin="Margin.Dense" />
+                <MudTextField @bind-Value="_horaNoche" Label="Parte noche (HH:mm)" Style="max-width:160px;" Margin="Margin.Dense" />
                 <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Save"
                            OnClick="GuardarHorarios">Guardar</MudButton>
             </div>
+            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mb-2 d-block">
+                El parte de noche sale a la mañana (06:00 por defecto) y reporta la jornada del turno noche del día anterior.
+            </MudText>
             <MudList T="string" Dense="true">
                 <MudListItem T="string" Icon="@Icons.Material.Filled.Sync">
                     Auto-sync extra: <b>@(_opt.AutoSyncHoras is { Count: > 0 } h ? string.Join(" y ", h) : "—")</b>
@@ -161,6 +165,7 @@
     // Horarios
     private string _horaManana = "07:00";
     private string _horaTarde = "14:00";
+    private string _horaNoche = "06:00";
 
     // Alta de usuario
     private string _nuNombre = string.Empty;
@@ -202,7 +207,7 @@
         _destinatarios = await db.Destinatarios.OrderBy(d => d.Nombre).ToListAsync();
         _usuarios = await db.Usuarios.OrderBy(u => u.Nombre).ToListAsync();
         var cfg = await db.ConfiguracionParte.FirstOrDefaultAsync();
-        if (cfg is not null) { _horaManana = cfg.HoraParteManana; _horaTarde = cfg.HoraParteTarde; }
+        if (cfg is not null) { _horaManana = cfg.HoraParteManana; _horaTarde = cfg.HoraParteTarde; _horaNoche = cfg.HoraParteNoche; }
     }
 
     // ---- Destinatarios ----
@@ -250,7 +255,7 @@
     // ---- Horarios ----
     private async Task GuardarHorarios()
     {
-        if (!TimeOnly.TryParse(_horaManana, out _) || !TimeOnly.TryParse(_horaTarde, out _))
+        if (!TimeOnly.TryParse(_horaManana, out _) || !TimeOnly.TryParse(_horaTarde, out _) || !TimeOnly.TryParse(_horaNoche, out _))
         {
             Snackbar.Add("Horario inválido. Usá formato HH:mm (ej. 07:00).", Severity.Warning);
             return;
@@ -260,8 +265,9 @@
         if (cfg is null) { cfg = new ConfiguracionParte(); db.ConfiguracionParte.Add(cfg); }
         cfg.HoraParteManana = _horaManana.Trim();
         cfg.HoraParteTarde = _horaTarde.Trim();
+        cfg.HoraParteNoche = _horaNoche.Trim();
         await db.SaveChangesAsync();
-        Snackbar.Add($"Horarios guardados: mañana {cfg.HoraParteManana}, tarde {cfg.HoraParteTarde}.", Severity.Success);
+        Snackbar.Add($"Horarios guardados: mañana {cfg.HoraParteManana}, tarde {cfg.HoraParteTarde}, noche {cfg.HoraParteNoche}.", Severity.Success);
     }
 
     // ---- Usuarios ----

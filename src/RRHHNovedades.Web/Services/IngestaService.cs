@@ -44,6 +44,14 @@ public class IngestaService(
             emp.Telefono = r.Telefono;
             emp.Area = r.Area;
             emp.Activo = true;
+
+            // Turno noche: lo define la segmentación "Turno" de Humand (ej. "Turno C Noche"),
+            // no el horario. Si el empleado deja de estar segmentado como nocturno, vuelve a
+            // Mañana y la inferencia por horario lo acomoda en el próximo sync del día.
+            if (EsSegmentacionNocturna(r.SegTurno))
+                emp.Turno = Turno.Noche;
+            else if (emp.Turno == Turno.Noche)
+                emp.Turno = Turno.Manana;
         }
         await db.SaveChangesAsync(ct);
         logger.LogInformation("Ingesta: {Count} empleados sincronizados", remotos.Count);
@@ -148,10 +156,16 @@ public class IngestaService(
 
     private static Turno InferirTurno(JornadaHumand j, Empleado emp, TimeOnly corte)
     {
+        // Nocturno por segmentación: siempre Noche (su inicio ~22:00 caería como "Tarde" por hora).
+        if (emp.Turno == Turno.Noche) return Turno.Noche;
         var inicio = j.InicioTeorico ?? j.HoraEntrada;
         if (inicio is { } i) return i >= corte ? Turno.Tarde : Turno.Manana;
         return emp.Turno;
     }
+
+    // internal para testearla (InternalsVisibleTo RRHHNovedades.Tests).
+    internal static bool EsSegmentacionNocturna(string? segTurno) =>
+        segTurno?.Contains("noche", StringComparison.OrdinalIgnoreCase) == true;
 
     private static TimeOnly? ParseTime(string? s) => TimeOnly.TryParse(s, out var t) ? t : null;
 }

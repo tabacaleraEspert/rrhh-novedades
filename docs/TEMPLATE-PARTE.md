@@ -38,7 +38,7 @@ Reporte automático de asistencia · Tabacalera Espert
 
 | Var | Contenido | Ejemplo |
 |-----|-----------|---------|
-| `{{1}}` | Turno · fecha | `Turno Mañana · 09/06/2026` |
+| `{{1}}` | Turno · fecha | `Turno Mañana · 09/06/2026` (también `Turno Tarde` / `Turno Noche`; en el de noche la fecha es la de la **jornada**, o sea el día en que arrancó el turno, no el del envío) |
 | `{{2}}` | Presentes (número) | `12` |
 | `{{3}}` | Tardanzas: cantidad (nombres) | `2 (Gómez, Rosa; Pérez, Juan)` — `0` si no hay |
 | `{{4}}` | Ausentes: cantidad (nombres) | `3 (López, Carla; Ruiz, Pedro; Sosa, Mario)` |

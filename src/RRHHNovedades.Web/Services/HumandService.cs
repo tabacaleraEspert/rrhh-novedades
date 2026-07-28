@@ -51,7 +51,8 @@ public class HumandService : IHumandService
                     Str(u, "firstName") ?? string.Empty,
                     Str(u, "lastName") ?? string.Empty,
                     Str(u, "phoneNumber") ?? Str(u, "phone"),
-                    Segmentacion(u, "Sector")));
+                    Segmentacion(u, "Sector"),
+                    Segmentacion(u, "Turno")));
             }
 
             if (users.GetArrayLength() < PageLimit) break;

@@ -111,6 +111,23 @@ CREATE TABLE "SsoTicketsUsados" (
 Post-deploy: cargar el DNI de cada usuario que vaya a entrar por SSO (Configuración → Usuarios,
 botón de editar DNI) y coordinar con el equipo del Command Center la prueba end-to-end.
 
+## Turno noche (jul-2026)
+
+**SQL manual en prod — correr ANTES de deployar la imagen** (`EnsureCreated` no altera una DB
+existente; sin la columna, cualquier SELECT de `ConfiguracionParte` falla):
+
+```sql
+ALTER TABLE "ConfiguracionParte" ADD COLUMN IF NOT EXISTS "HoraParteNoche" character varying(5) NOT NULL DEFAULT '06:00';
+```
+
+Como la DB no tiene acceso público, el DDL se ejecuta con un Container Apps Job efímero dentro
+del entorno: `bash infra/alter-noche.sh` (idempotente; requiere `az login` con permisos en
+`rg-rrhh-prod`; el password sale de Key Vault vía Managed Identity y nunca toca la máquina local).
+
+El parte de noche sale a las 06:00 y reporta la jornada del día anterior. Los empleados nocturnos
+se detectan por la segmentación **"Turno"** de Humand (ítem que contenga "Noche", ej. "Turno C Noche").
+No requiere template nuevo de Twilio (la variable {{1}} ya lleva el nombre del turno).
+
 ## Checklist Go-Live
 
 Correr `espert-azure-standards/GO-LIVE-CHECKLIST.md`. Estado de esta app:

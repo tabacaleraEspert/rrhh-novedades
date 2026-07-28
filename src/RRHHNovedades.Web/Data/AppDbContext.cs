@@ -59,6 +59,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         {
             e.Property(x => x.HoraParteManana).HasMaxLength(5);
             e.Property(x => x.HoraParteTarde).HasMaxLength(5);
+            e.Property(x => x.HoraParteNoche).HasMaxLength(5);
         });
 
         modelBuilder.Entity<SsoTicketUsado>(e =>

@@ -27,7 +27,7 @@
         <RowTemplate>
             <MudTd DataLabel="Apellido y nombre">@context.ApellidoNombre</MudTd>
             <MudTd DataLabel="Área">@(context.Area ?? "—")</MudTd>
-            <MudTd DataLabel="Turno">@(context.Turno == Turno.Manana ? "Mañana" : "Tarde")</MudTd>
+            <MudTd DataLabel="Turno">@(context.Turno switch { Turno.Manana => "Mañana", Turno.Tarde => "Tarde", _ => "Noche" })</MudTd>
             <MudTd DataLabel="Teléfono">@(context.Telefono ?? "—")</MudTd>
             <MudTd DataLabel="ID Humand">@context.EmployeeInternalId</MudTd>
         </RowTemplate>

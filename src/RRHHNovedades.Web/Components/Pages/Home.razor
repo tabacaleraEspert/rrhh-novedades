@@ -38,6 +38,7 @@
             <MudButton Color="@(_turno is null ? Color.Primary : Color.Default)" OnClick="@(() => SetTurno(null))">Global</MudButton>
             <MudButton Color="@(_turno == Turno.Manana ? Color.Primary : Color.Default)" OnClick="@(() => SetTurno(Turno.Manana))">Mañana</MudButton>
             <MudButton Color="@(_turno == Turno.Tarde ? Color.Primary : Color.Default)" OnClick="@(() => SetTurno(Turno.Tarde))">Tarde</MudButton>
+            <MudButton Color="@(_turno == Turno.Noche ? Color.Primary : Color.Default)" OnClick="@(() => SetTurno(Turno.Noche))">Noche</MudButton>
         </MudButtonGroup>
         <MudIconButton Icon="@Icons.Material.Filled.Download" Color="Color.Primary" OnClick="ExportarCsv"
                        title="Exportar CSV" />
@@ -137,7 +138,7 @@
         <RowTemplate>
             <MudTd DataLabel="Empleado">@context.Empleado.ApellidoNombre</MudTd>
             <MudTd DataLabel="Área">@(context.Empleado.Area ?? "—")</MudTd>
-            <MudTd DataLabel="Turno">@(context.Turno == Turno.Manana ? "Mañana" : "Tarde")</MudTd>
+            <MudTd DataLabel="Turno">@TurnoTexto(context.Turno)</MudTd>
             <MudTd DataLabel="Estado"><MudChip T="string" Size="Size.Small" Color="EstadoColor(context.Estado)">@ChipTexto(context)</MudChip></MudTd>
             <MudTd DataLabel="Entrada">@(context.HoraEntrada?.ToString("HH:mm") ?? "—")</MudTd>
             <MudTd DataLabel="Salida">@(context.HoraSalida?.ToString("HH:mm") ?? "—")</MudTd>
@@ -414,7 +415,7 @@
         {
             sb.AppendLine(string.Join(";",
                 Csv(n.Empleado.ApellidoNombre), Csv(n.Empleado.Area ?? ""),
-                n.Turno == Turno.Manana ? "Mañana" : "Tarde",
+                TurnoTexto(n.Turno),
                 EstadoTexto(n.Estado), n.MinutosTardanza,
                 n.HoraEntrada?.ToString("HH:mm") ?? "", n.HoraSalida?.ToString("HH:mm") ?? "",
                 Csv(n.MotivoNovedad ?? "")));
@@ -458,6 +459,13 @@
         EstadoJornada.AusenteJustificado => Color.Info,
         EstadoJornada.Pendiente => Color.Default,
         _ => Color.Default
+    };
+
+    private static string TurnoTexto(Turno t) => t switch
+    {
+        Turno.Manana => "Mañana",
+        Turno.Tarde => "Tarde",
+        _ => "Noche"
     };
 
     private static string EstadoTexto(EstadoJornada e) => e switch

@@ -18,7 +18,7 @@
 
 <MudText Typo="Typo.h5" Class="mb-1" Style="font-weight:600;">Bot de novedades</MudText>
 <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
-    Partes automáticos: @_horaManana (mañana) y @_horaTarde (tarde) · @_opt.TimeZone
+    Partes automáticos: @_horaManana (mañana), @_horaTarde (tarde) y @_horaNoche (noche, reporta la jornada del día anterior) · @_opt.TimeZone
 </MudText>
 
 <MudGrid>
@@ -30,10 +30,10 @@
                            OnClick="Sincronizar" Disabled="_busy">Sincronizar hoy</MudButton>
             </div>
             <MudDivider Class="my-2" />
-            @foreach (var t in new[] { Turno.Manana, Turno.Tarde })
+            @foreach (var t in new[] { Turno.Manana, Turno.Tarde, Turno.Noche })
             {
                 <div class="d-flex align-center gap-2 my-1">
-                    <MudText Style="min-width:90px;font-weight:500;">@(t == Turno.Manana ? "Mañana" : "Tarde")</MudText>
+                    <MudText Style="min-width:90px;font-weight:500;">@TurnoTexto(t)</MudText>
                     <MudButton Size="Size.Small" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Visibility"
                                OnClick="@(() => Previsualizar(t))" Disabled="_busy">Previsualizar</MudButton>
                     <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Send"
@@ -67,7 +67,7 @@
         </HeaderContent>
         <RowTemplate>
             <MudTd DataLabel="Fecha">@context.Fecha.ToString("dd/MM/yyyy") @Reloj.EnLocal(context.EnviadoUtc).ToString("HH:mm")</MudTd>
-            <MudTd DataLabel="Turno">@(context.Turno == Turno.Manana ? "Mañana" : "Tarde")</MudTd>
+            <MudTd DataLabel="Turno">@TurnoTexto(context.Turno)</MudTd>
             <MudTd DataLabel="Teléfono">@context.Telefono</MudTd>
             <MudTd DataLabel="Resultado">
                 <MudChip T="string" Size="Size.Small" Color="@(context.Exito ? Color.Success : Color.Error)">
@@ -83,6 +83,7 @@
     private AsistenciaOptions _opt = new();
     private string _horaManana = "07:00";
     private string _horaTarde = "14:00";
+    private string _horaNoche = "06:00";
     private bool _busy;
     private string? _preview;
     private List<EnvioParte> _envios = [];
@@ -93,7 +94,7 @@
         await using (var db = await DbFactory.CreateDbContextAsync())
         {
             var cfg = await db.ConfiguracionParte.FirstOrDefaultAsync();
-            if (cfg is not null) { _horaManana = cfg.HoraParteManana; _horaTarde = cfg.HoraParteTarde; }
+            if (cfg is not null) { _horaManana = cfg.HoraParteManana; _horaTarde = cfg.HoraParteTarde; _horaNoche = cfg.HoraParteNoche; }
         }
         await CargarEnvios();
     }
@@ -118,12 +119,20 @@
         finally { _busy = false; }
     }
 
+    /// <summary>
+    /// Jornada que le corresponde al parte según el turno. Para Noche, si es de madrugada/mañana
+    /// (antes del mediodía) el turno que interesa es el que ARRANCÓ ayer; después del mediodía,
+    /// el que arranca hoy. Mañana/Tarde siempre reportan el día en curso.
+    /// </summary>
+    private DateOnly FechaJornada(Turno t) =>
+        t == Turno.Noche && Reloj.HoraActual < new TimeOnly(12, 0) ? Reloj.Hoy.AddDays(-1) : Reloj.Hoy;
+
     private async Task Previsualizar(Turno t)
     {
         _busy = true;
         try
         {
-            var c = await Parte.ArmarParteAsync(Reloj.Hoy, t);
+            var c = await Parte.ArmarParteAsync(FechaJornada(t), t);
             _preview = c.Completo;
         }
         catch (Exception ex) { Snackbar.Add($"Error: {ex.Message}", Severity.Error); }
@@ -138,25 +147,32 @@
 
     private async Task Enviar(Turno t)
     {
-        // Confirmación: las filas Mañana/Tarde son idénticas y es fácil tocar la equivocada.
+        // Confirmación: las filas de turno son idénticas y es fácil tocar la equivocada.
         var cuantos = await ContarDestinatariosAsync();
-        var turnoTxt = t == Turno.Manana ? "Mañana" : "Tarde";
+        var fecha = FechaJornada(t);
         var ok = await Dialogs.ShowMessageBoxAsync(
             "Confirmar envío",
-            $"Se va a enviar el parte de {turnoTxt} a {cuantos} destinatario(s) por WhatsApp. ¿Continuar?",
+            $"Se va a enviar el parte de {TurnoTexto(t)} (jornada del {fecha:dd/MM}) a {cuantos} destinatario(s) por WhatsApp. ¿Continuar?",
             yesText: "Enviar", cancelText: "Cancelar");
         if (ok != true) return;
 
         _busy = true;
         try
         {
-            var r = await Parte.EnviarParteAsync(Reloj.Hoy, t);
+            var r = await Parte.EnviarParteAsync(fecha, t);
             _preview = r.Contenido.Completo;
-            Snackbar.Add($"Parte {(t == Turno.Manana ? "mañana" : "tarde")}: {r.Enviados} enviados, {r.Fallidos} fallidos.",
+            Snackbar.Add($"Parte {TurnoTexto(t).ToLowerInvariant()}: {r.Enviados} enviados, {r.Fallidos} fallidos.",
                 r.Fallidos == 0 ? Severity.Success : Severity.Warning);
             await CargarEnvios();
         }
         catch (Exception ex) { Snackbar.Add($"Error: {ex.Message}", Severity.Error); }
         finally { _busy = false; }
     }
+
+    private static string TurnoTexto(Turno t) => t switch
+    {
+        Turno.Manana => "Mañana",
+        Turno.Tarde => "Tarde",
+        _ => "Noche"
+    };
 }

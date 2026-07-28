@@ -13,4 +13,7 @@ public class ConfiguracionParte
 
     /// <summary>Hora de envío del parte de la tarde (HH:mm).</summary>
     public string HoraParteTarde { get; set; } = "14:00";
+
+    /// <summary>Hora de envío del parte del turno noche (HH:mm). Reporta la jornada del día ANTERIOR.</summary>
+    public string HoraParteNoche { get; set; } = "06:00";
 }

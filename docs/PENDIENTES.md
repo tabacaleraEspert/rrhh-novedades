@@ -12,6 +12,12 @@ Plan de ejecución por etapas. Base funcional: `docs/Novedades_RRHH.pdf` (spec v
 > **Listo para producción salvo:** (1) **deploy a Azure** (sin esto el scheduler no corre solo);
 > (2) cargar destinatarios reales en Configuración; (3) migraciones EF (reemplazar EnsureCreated);
 > (4) rotar API key de Humand y AuthToken de Twilio (fueron por chat).
+>
+> **Novedad (27-jul-2026): turno Noche + Nocturnidad** ✅. Tercer parte diario a las 06:00
+> (reporta la jornada del turno noche del día anterior); empleados nocturnos detectados por la
+> segmentación "Turno" de Humand (ítem con "Noche"); página **Nocturnidad** con el reporte mensual
+> de horas 21–06 (fichadas reales, redondeo por noche: ≥45 min ⇒ hora arriba) y export CSV.
+> ⚠️ Antes de deployar: correr el `ALTER TABLE` de `docs/DEPLOY-AZURE.md` §Turno noche.
 
 ---
 

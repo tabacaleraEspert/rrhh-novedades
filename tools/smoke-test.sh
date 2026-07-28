@@ -41,15 +41,22 @@ else
 fi
 
 echo "[2/5] Levantando app (mock Humand, Twilio off, DB Smoke, scheduler neutralizado)..."
-# DB efímera: se recrea en cada corrida para que el resultado sea siempre el mismo.
-sqlcmd -S "(localdb)\\mssqllocaldb" -Q "IF DB_ID('RRHHNovedades_Smoke') IS NOT NULL BEGIN ALTER DATABASE [RRHHNovedades_Smoke] SET SINGLE_USER WITH ROLLBACK IMMEDIATE; DROP DATABASE [RRHHNovedades_Smoke]; END" >/dev/null 2>&1
+# DB efímera (Postgres, igual que la app): se recrea en cada corrida para que el resultado sea
+# siempre el mismo. Se intenta psql local y, si no hay, el contenedor Docker que publica el 5432.
+DROP_SQL='DROP DATABASE IF EXISTS "RRHHNovedades_Smoke" WITH (FORCE);'
+if command -v psql >/dev/null 2>&1; then
+    PGPASSWORD=postgres psql -h localhost -p 5432 -U postgres -c "$DROP_SQL" >/dev/null 2>&1
+else
+    PG_CONT=$(docker ps --filter "publish=5432" --format '{{.Names}}' 2>/dev/null | head -1)
+    [ -n "${PG_CONT:-}" ] && docker exec "$PG_CONT" psql -U postgres -c "$DROP_SQL" >/dev/null 2>&1
+fi
 SSO_SECRET="secreto-sso-smoke-0123456789abcdef-0123456789" # solo para el smoke (32+ chars)
 ASPNETCORE_ENVIRONMENT=Development \
 Humand__UseMock=true \
 Twilio__AccountSid= Twilio__AuthToken= Twilio__ContentSidParte= \
 Sso__SharedSecret="$SSO_SECRET" \
-ConnectionStrings__Default="Server=(localdb)\\mssqllocaldb;Database=RRHHNovedades_Smoke;Trusted_Connection=True;MultipleActiveResultSets=true" \
-Asistencia__HoraParteManana=23:59 Asistencia__HoraParteTarde=23:59 \
+ConnectionStrings__Default="Host=localhost;Port=5432;Database=RRHHNovedades_Smoke;Username=postgres;Password=postgres" \
+Asistencia__HoraParteManana=23:59 Asistencia__HoraParteTarde=23:59 Asistencia__HoraParteNoche=23:59 \
 Asistencia__AutoSyncHoras__0=23:59 \
 dotnet run --project src/RRHHNovedades.Web --no-build --no-launch-profile --urls "$BASE" >/dev/null 2>&1 &
 APP_PID=$!
@@ -68,13 +75,13 @@ login=$(curl -s -c "$COOKIES" -o /dev/null -w "%{http_code}" \
 [ "$login" = "302" ] && verde "  OK   login" || { rojo "  FAIL login (HTTP $login)"; FALLOS=$((FALLOS+1)); }
 
 sync=$(curl -s -b "$COOKIES" -X POST "$BASE/api/ops/sync")
-check "sync de 8 empleados mock" "$sync" '"empleados":8'
-check "8 novedades del día"      "$sync" '"novedades":8'
+check "sync de 10 empleados mock" "$sync" '"empleados":10'
+check "10 novedades del día"      "$sync" '"novedades":10'
 
 echo "[4/5] Validando clasificación y parte (turno mañana)..."
 resumen=$(curl -s -b "$COOKIES" "$BASE/api/ops/resumen")
-check "resumen: total 8"               "$resumen" '"total":8'
-check "resumen: 2 presentes"           "$resumen" '"Presente":2'
+check "resumen: total 10"              "$resumen" '"total":10'
+check "resumen: 3 presentes"           "$resumen" '"Presente":3'
 check "resumen: 1 ausente injust."     "$resumen" '"AusenteInjustificado":1'
 check "resumen: 2 justificados"        "$resumen" '"AusenteJustificado":2'
 check "resumen: 1 franco"              "$resumen" '"FrancoNoLaborable":1'
@@ -88,6 +95,11 @@ check "parte: pie fijo del template"   "$parte" "Reporte automático de asistenc
 
 parteT=$(curl -s -b "$COOKIES" "$BASE/api/ops/parte/preview?turno=Tarde")
 check "parte tarde: tardanza de López" "$parteT" "Tardanzas: 1 (López, Carla)"
+
+parteN=$(curl -s -b "$COOKIES" "$BASE/api/ops/parte/preview?turno=Noche")
+check "parte noche: encabezado"        "$parteN" "Turno Noche"
+check "parte noche: 1 presente"        "$parteN" "Presentes: 1"
+check "parte noche: tardanza de Acosta" "$parteN" "Tardanzas: 1 (Acosta, Bruno)"
 
 echo "[4b/5] SSO Command Center (ticket JWT de un solo uso)..."
 b64url() { openssl base64 -A | tr '+/' '-_' | tr -d '='; }
@@ -111,7 +123,7 @@ replayc=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$BASE/api/auth/sso" -H
 [ "$replayc" = "401" ] && verde "  OK   replay del ticket → 401" || { rojo "  FAIL replay (HTTP $replayc, esperaba 401)"; FALLOS=$((FALLOS+1)); }
 
 echo "[5/5] Páginas clave responden..."
-for ruta in "/" "/ayuda" "/empleados" "/mensajes"; do
+for ruta in "/" "/ayuda" "/empleados" "/mensajes" "/nocturnidad"; do
     pc=$(curl -s -b "$COOKIES" -o /dev/null -w "%{http_code}" "$BASE$ruta")
     [ "$pc" = "200" ] && verde "  OK   $ruta" || { rojo "  FAIL $ruta (HTTP $pc)"; FALLOS=$((FALLOS+1)); }
 done

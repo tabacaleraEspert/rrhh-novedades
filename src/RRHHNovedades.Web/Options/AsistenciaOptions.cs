@@ -13,6 +13,9 @@ public class AsistenciaOptions
     /// <summary>Hora de envío del parte del turno tarde (HH:mm). Parametrizable.</summary>
     public string HoraParteTarde { get; set; } = "14:00";
 
+    /// <summary>Hora de envío del parte del turno noche (HH:mm). Reporta la jornada del día anterior.</summary>
+    public string HoraParteNoche { get; set; } = "06:00";
+
     /// <summary>Hora límite para separar turno mañana de turno tarde según el inicio de jornada.</summary>
     public string CorteTurnoTarde { get; set; } = "13:00";
 

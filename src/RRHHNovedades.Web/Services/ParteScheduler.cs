@@ -7,8 +7,9 @@ using RRHHNovedades.Web.Options;
 namespace RRHHNovedades.Web.Services;
 
 /// <summary>
-/// Dispara los 2 partes diarios (mañana y tarde) y las sincronizaciones automáticas extra,
+/// Dispara los 3 partes diarios (mañana, tarde y noche) y las sincronizaciones automáticas extra,
 /// en los horarios configurados (TZ Argentina). Antes de cada parte sincroniza el día desde Humand.
+/// El parte de noche sale a la mañana (06:00 default) y reporta la jornada del día anterior.
 /// Los horarios de los partes se leen de la DB (configurables desde Configuración sin redeploy).
 /// </summary>
 public class ParteScheduler(
@@ -46,18 +47,20 @@ public class ParteScheduler(
 
         // Horarios de los partes: configurables desde la UI (tabla ConfiguracionParte). Si por algo
         // no se puede leer, caemos a los de appsettings.
-        var (horaManana, horaTarde) = await LeerHorariosParteAsync(opt, ct);
+        var (horaManana, horaTarde, horaNoche) = await LeerHorariosParteAsync(opt, ct);
 
-        // Partes (sincronizan + envían)
-        foreach (var (turno, horaTxt) in new[]
+        // Partes (sincronizan + envían). El de Noche sale a la mañana siguiente (06:00) y reporta
+        // la jornada del día ANTERIOR (la noche que acaba de terminar).
+        foreach (var (turno, horaTxt, fechaJornada) in new[]
                  {
-                     (Turno.Manana, horaManana),
-                     (Turno.Tarde, horaTarde)
+                     (Turno.Manana, horaManana, hoy),
+                     (Turno.Tarde, horaTarde, hoy),
+                     (Turno.Noche, horaNoche, hoy.AddDays(-1))
                  })
         {
             if (!Vence(horaTxt, horaActual, hoy, $"parte-{turno}")) continue;
-            logger.LogInformation("Disparando parte {Turno} del {Hoy}", turno, hoy);
-            await EjecutarParteAsync(hoy, turno, ct);
+            logger.LogInformation("Disparando parte {Turno} de la jornada {Fecha}", turno, fechaJornada);
+            await EjecutarParteAsync(fechaJornada, turno, ct);
         }
 
         // Sincronizaciones automáticas extra (solo refrescan datos, no envían)
@@ -69,19 +72,19 @@ public class ParteScheduler(
         }
     }
 
-    private async Task<(string manana, string tarde)> LeerHorariosParteAsync(AsistenciaOptions opt, CancellationToken ct)
+    private async Task<(string manana, string tarde, string noche)> LeerHorariosParteAsync(AsistenciaOptions opt, CancellationToken ct)
     {
         try
         {
             await using var db = await dbFactory.CreateDbContextAsync(ct);
             var cfg = await db.ConfiguracionParte.AsNoTracking().FirstOrDefaultAsync(ct);
-            if (cfg is not null) return (cfg.HoraParteManana, cfg.HoraParteTarde);
+            if (cfg is not null) return (cfg.HoraParteManana, cfg.HoraParteTarde, cfg.HoraParteNoche);
         }
         catch (Exception ex)
         {
             logger.LogWarning(ex, "No se pudo leer ConfiguracionParte; uso los horarios de appsettings");
         }
-        return (opt.HoraParteManana, opt.HoraParteTarde);
+        return (opt.HoraParteManana, opt.HoraParteTarde, opt.HoraParteNoche);
     }
 
     /// <summary>True si la hora configurada ya pasó hoy y todavía no se disparó (lo marca como disparado).</summary>

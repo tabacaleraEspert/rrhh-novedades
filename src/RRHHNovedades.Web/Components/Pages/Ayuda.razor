@@ -22,7 +22,8 @@
             </MudText>
             <MudList T="string" Dense="true">
                 <MudListItem T="string" Icon="@Icons.Material.Filled.Dashboard">Muestra el <b>Dashboard</b> con presentes, tardanzas, ausentes y justificados.</MudListItem>
-                <MudListItem T="string" Icon="@Icons.Material.Filled.Send">Envía <b>2 partes diarios por WhatsApp</b> al equipo de RR. HH. (mañana y tarde).</MudListItem>
+                <MudListItem T="string" Icon="@Icons.Material.Filled.Send">Envía <b>3 partes diarios por WhatsApp</b> al equipo de RR. HH. (mañana, tarde y noche).</MudListItem>
+                <MudListItem T="string" Icon="@Icons.Material.Filled.NightsStay">Arma el <b>reporte mensual de Nocturnidad</b> (horas trabajadas entre las 21:00 y las 06:00).</MudListItem>
             </MudList>
             <MudText Typo="Typo.body2" Class="mt-2">
                 No hay que cargar nada a mano acá: <b>la fuente de los datos es Humand</b>. Si algo está mal en el sistema
@@ -60,7 +61,7 @@
         <ChildContent>
             <MudList T="string" Dense="true">
                 <MudListItem T="string" Icon="@Icons.Material.Filled.CalendarMonth"><b>Fecha:</b> elegí cualquier día (hoy o pasado) con el selector de arriba a la derecha.</MudListItem>
-                <MudListItem T="string" Icon="@Icons.Material.Filled.FilterAlt"><b>Filtros combinables:</b> turno (Global / Mañana / Tarde), área (desplegable) y estado — hacé <b>clic en una tarjeta KPI</b> (Presentes, Tardanzas, etc.) para ver solo esa gente; clic de nuevo para quitar el filtro.</MudListItem>
+                <MudListItem T="string" Icon="@Icons.Material.Filled.FilterAlt"><b>Filtros combinables:</b> turno (Global / Mañana / Tarde / Noche), área (desplegable) y estado — hacé <b>clic en una tarjeta KPI</b> (Presentes, Tardanzas, etc.) para ver solo esa gente; clic de nuevo para quitar el filtro.</MudListItem>
                 <MudListItem T="string" Icon="@Icons.Material.Filled.Search"><b>Buscador:</b> escribí un nombre o un área en el cuadro de búsqueda de la tabla.</MudListItem>
                 <MudListItem T="string" Icon="@Icons.Material.Filled.PersonSearch"><b>Detalle por persona:</b> hacé clic en cualquier fila para ver sus últimos 14 días (estado, horarios, motivos).</MudListItem>
                 <MudListItem T="string" Icon="@Icons.Material.Filled.ShowChart"><b>Tendencia:</b> el gráfico muestra el % de asistencia de los últimos 14 días (los fines de semana bajan, es normal).</MudListItem>
@@ -77,11 +78,12 @@
         </TitleContent>
         <ChildContent>
             <MudText Typo="Typo.body2" Class="mb-2">
-                El sistema envía <b>dos partes por día</b> por WhatsApp, sin intervención de nadie:
+                El sistema envía <b>tres partes por día</b> por WhatsApp, sin intervención de nadie:
             </MudText>
             <MudList T="string" Dense="true">
                 <MudListItem T="string" Icon="@Icons.Material.Filled.WbSunny"><b>Parte de la mañana</b> (07:00 por defecto): novedades del turno mañana.</MudListItem>
                 <MudListItem T="string" Icon="@Icons.Material.Filled.WbTwilight"><b>Parte de la tarde</b> (14:00 por defecto): novedades del turno tarde.</MudListItem>
+                <MudListItem T="string" Icon="@Icons.Material.Filled.NightsStay"><b>Parte de la noche</b> (06:00 por defecto): sale a la mañana e informa las novedades del <b>turno noche que acaba de terminar</b> (la jornada que arrancó el día anterior).</MudListItem>
             </MudList>
             <MudText Typo="Typo.body2" Class="my-2">
                 Cada parte incluye: <b>presentes</b> (cantidad), y <b>tardanzas, ausentes y justificados con nombre y apellido</b>.
@@ -102,11 +104,26 @@
 
     <MudExpansionPanel>
         <TitleContent>
+            <div class="d-flex align-center gap-2"><MudIcon Icon="@Icons.Material.Filled.NightsStay" Color="Color.Primary" /><MudText Style="font-weight:600;">Turno noche y Nocturnidad</MudText></div>
+        </TitleContent>
+        <ChildContent>
+            <MudList T="string" Dense="true">
+                <MudListItem T="string" Icon="@Icons.Material.Filled.Group"><b>¿Quiénes son turno noche?</b> Los que en Humand tienen la segmentación "Turno" con el ítem de <b>noche</b> (ej. "Turno C Noche"). Se asigna en Humand, no acá.</MudListItem>
+                <MudListItem T="string" Icon="@Icons.Material.Filled.Send"><b>Su parte</b> sale a las 06:00 de la mañana siguiente, cuando el turno ya terminó. En el Dashboard, la jornada del turno noche figura en la <b>fecha en que arrancó</b> (la noche del lunes se ve en el lunes).</MudListItem>
+                <MudListItem T="string" Icon="@Icons.Material.Filled.NightsStay"><b>Nocturnidad</b> (página del menú): reporte mensual con las <b>horas trabajadas entre las 21:00 y las 06:00</b> según las fichadas de Humand. Cuenta para <b>cualquier</b> empleado que trabaje en esa franja, no solo el turno noche (ej. una salida 22:00 del turno tarde suma 1 hora).</MudListItem>
+                <MudListItem T="string" Icon="@Icons.Material.Filled.Calculate"><b>Redondeo:</b> cada noche se redondea a horas completas; a partir de los <b>45 minutos</b> se redondea para arriba (8 h 46 min → 9 h; 8 h 30 min → 8 h).</MudListItem>
+                <MudListItem T="string" Icon="@Icons.Material.Filled.Download">El reporte se puede <b>exportar a Excel/CSV</b> con el botón de descarga, eligiendo mes y año.</MudListItem>
+            </MudList>
+        </ChildContent>
+    </MudExpansionPanel>
+
+    <MudExpansionPanel>
+        <TitleContent>
             <div class="d-flex align-center gap-2"><MudIcon Icon="@Icons.Material.Filled.Schedule" Color="Color.Primary" /><MudText Style="font-weight:600;">¿Cuándo se actualizan los datos?</MudText></div>
         </TitleContent>
         <ChildContent>
             <MudList T="string" Dense="true">
-                <MudListItem T="string" Icon="@Icons.Material.Filled.Autorenew">Automáticamente <b>antes de cada parte</b> (07:00 y 14:00).</MudListItem>
+                <MudListItem T="string" Icon="@Icons.Material.Filled.Autorenew">Automáticamente <b>antes de cada parte</b> (06:00, 07:00 y 14:00).</MudListItem>
                 <MudListItem T="string" Icon="@Icons.Material.Filled.Autorenew">Automáticamente en los <b>horarios de auto-sync</b> (10:30 y 16:30 por defecto, configurables).</MudListItem>
                 <MudListItem T="string" Icon="@Icons.Material.Filled.TouchApp">A demanda, con el botón <b>⟳ del Dashboard</b> o "Sincronizar hoy" en Bot de novedades.</MudListItem>
                 <MudListItem T="string" Icon="@Icons.Material.Filled.Monitor">La pantalla del Dashboard además se <b>refresca sola cada 5 minutos</b>.</MudListItem>
@@ -121,7 +138,7 @@
         <ChildContent>
             <MudList T="string" Dense="true">
                 <MudListItem T="string" Icon="@Icons.Material.Filled.ContactPhone"><b>Destinatarios del parte:</b> en Configuración se agregan/quitan los teléfonos que reciben los partes. Formato internacional: <code>+549</code> + código de área + número (ej. <code>+5491122334455</code>). El interruptor "Activo" permite pausar a alguien sin borrarlo.</MudListItem>
-                <MudListItem T="string" Icon="@Icons.Material.Filled.Schedule"><b>Horarios</b> de partes y auto-sync: por ahora se cambian en la configuración del servidor (pedirlo a Sistemas).</MudListItem>
+                <MudListItem T="string" Icon="@Icons.Material.Filled.Schedule"><b>Horarios de los partes</b> (mañana, tarde y noche): se cambian en Configuración y se aplican sin reiniciar. Los de <b>auto-sync</b> se cambian en la configuración del servidor (pedirlo a Sistemas).</MudListItem>
                 <MudListItem T="string" Icon="@Icons.Material.Filled.People"><b>Empleados:</b> la lista se sincroniza sola desde Humand (altas, bajas y cambios de área). No se editan acá.</MudListItem>
             </MudList>
         </ChildContent>
@@ -156,5 +173,5 @@
 
 @code {
     // Actualizar esta fecha cada vez que se modifique el manual (ver CLAUDE.md → "Manual de uso").
-    private const string UltimaActualizacion = "08/07/2026";
+    private const string UltimaActualizacion = "27/07/2026";
 }

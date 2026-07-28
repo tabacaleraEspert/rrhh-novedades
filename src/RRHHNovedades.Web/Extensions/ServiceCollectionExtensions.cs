@@ -34,6 +34,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ITwilioService, TwilioService>();
         services.AddScoped<IIngestaService, IngestaService>();
         services.AddScoped<IParteService, ParteService>();
+        services.AddScoped<INocturnidadService, NocturnidadService>();
         services.AddScoped<ISsoTicketService, SsoTicketService>();
         services.AddMemoryCache();
 

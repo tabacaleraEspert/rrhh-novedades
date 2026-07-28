@@ -6,7 +6,8 @@ public record EmpleadoHumand(
     string Nombre,
     string Apellido,
     string? Telefono,
-    string? Area);
+    string? Area,
+    string? SegTurno = null); // Ítem de la segmentación "Turno" (ej. "Turno C Noche"); null si no tiene.
 
 /// <summary>Resumen de jornada de un empleado en un día (`/time-tracking/day-summaries`).</summary>
 public record JornadaHumand(

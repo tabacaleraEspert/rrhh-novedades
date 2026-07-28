@@ -66,6 +66,25 @@ public class ParteServiceTests
     }
 
     [Fact]
+    public async Task Parte_noche_lleva_titulo_Turno_Noche()
+    {
+        var (parte, factory) = await SetupAsync(nameof(Parte_noche_lleva_titulo_Turno_Noche));
+        var fecha = new DateOnly(2026, 6, 9);
+        await using (var ctx = factory.CreateDbContext())
+        {
+            ctx.Novedades.Add(new NovedadDiaria { EmpleadoId = 1, Fecha = fecha, Turno = Turno.Noche, Estado = EstadoJornada.Presente });
+            await ctx.SaveChangesAsync();
+        }
+
+        var c = await parte.ArmarParteAsync(fecha, Turno.Noche);
+
+        Assert.Contains("Turno Noche", c.Encabezado);
+        Assert.Contains("Presentes: 1", c.Cuerpo);
+        // La fecha del título es la de la JORNADA (la noche que arrancó ese día), no la del envío.
+        Assert.Equal("Turno Noche · 09/06/2026", c.Variables["1"]);
+    }
+
+    [Fact]
     public async Task Parte_de_turno_sin_novedades_da_ceros()
     {
         var (parte, _) = await SetupAsync(nameof(Parte_de_turno_sin_novedades_da_ceros));

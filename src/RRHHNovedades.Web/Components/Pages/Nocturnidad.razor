@@ -1,0 +1,110 @@
+@page "/nocturnidad"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject INocturnidadService NocturnidadSrv
+@inject IReloj Reloj
+@inject IJSRuntime JS
+@inject ISnackbar Snackbar
+@using RRHHNovedades.Web.Services
+
+<PageTitle>Nocturnidad - RRHH</PageTitle>
+
+<div class="d-flex align-center justify-space-between mb-1 flex-wrap gap-2">
+    <div>
+        <MudText Typo="Typo.h5" Style="font-weight:600;">Nocturnidad</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary">
+            Horas trabajadas entre las 21:00 y las 06:00 según las fichadas, por mes. Cada noche se
+            redondea hacia arriba a la hora completa a partir de los 45 minutos.
+        </MudText>
+    </div>
+    <div class="d-flex align-center gap-2 flex-wrap">
+        <MudSelect T="int" Label="Mes" Value="_mes" ValueChanged="OnMesChanged" Style="min-width:140px;"
+                   Margin="Margin.Dense" Dense="true">
+            @for (int m = 1; m <= 12; m++)
+            {
+                var mes = m;
+                <MudSelectItem T="int" Value="@mes">@NombreMes(mes)</MudSelectItem>
+            }
+        </MudSelect>
+        <MudSelect T="int" Label="Año" Value="_anio" ValueChanged="OnAnioChanged" Style="min-width:110px;"
+                   Margin="Margin.Dense" Dense="true">
+            @foreach (var a in _anios)
+            {
+                <MudSelectItem T="int" Value="@a">@a</MudSelectItem>
+            }
+        </MudSelect>
+        <MudIconButton Icon="@Icons.Material.Filled.Download" Color="Color.Primary" OnClick="ExportarCsv"
+                       title="Exportar CSV" Disabled="@(_filas.Count == 0)" />
+    </div>
+</div>
+
+<MudPaper Class="mt-3" Elevation="1">
+    <MudTable T="NocturnidadEmpleado" Items="_filas" Dense="true" Hover="true" Loading="_loading" Breakpoint="Breakpoint.Sm">
+        <NoRecordsContent>
+            <MudText>Sin horas nocturnas registradas en @NombreMes(_mes) @_anio.</MudText>
+        </NoRecordsContent>
+        <HeaderContent>
+            <MudTh>Empleado</MudTh>
+            <MudTh>Área</MudTh>
+            <MudTh Style="text-align:right;">Noches</MudTh>
+            <MudTh Style="text-align:right;">Horas nocturnas</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Empleado">@context.ApellidoNombre</MudTd>
+            <MudTd DataLabel="Área">@(context.Area ?? "—")</MudTd>
+            <MudTd DataLabel="Noches" Style="text-align:right;">@context.Noches</MudTd>
+            <MudTd DataLabel="Horas nocturnas" Style="text-align:right;font-weight:600;">@context.HorasNocturnas</MudTd>
+        </RowTemplate>
+    </MudTable>
+</MudPaper>
+
+@code {
+    private int _mes;
+    private int _anio;
+    private List<int> _anios = [];
+    private bool _loading = true;
+    private IReadOnlyList<NocturnidadEmpleado> _filas = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        var hoy = Reloj.Hoy;
+        _mes = hoy.Month;
+        _anio = hoy.Year;
+        _anios = Enumerable.Range(hoy.Year - 2, 3).Reverse().ToList();
+        await Cargar();
+    }
+
+    private async Task OnMesChanged(int m) { _mes = m; await Cargar(); }
+    private async Task OnAnioChanged(int a) { _anio = a; await Cargar(); }
+
+    private async Task Cargar()
+    {
+        _loading = true;
+        try { _filas = await NocturnidadSrv.ReporteMensualAsync(_anio, _mes); }
+        catch (Exception ex)
+        {
+            _filas = [];
+            Snackbar.Add($"Error al cargar el reporte: {ex.Message}", Severity.Error);
+        }
+        finally { _loading = false; }
+    }
+
+    private async Task ExportarCsv()
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("Empleado;Area;Noches;HorasNocturnas");
+        foreach (var f in _filas)
+            sb.AppendLine(string.Join(";", Csv(f.ApellidoNombre), Csv(f.Area ?? ""), f.Noches, f.HorasNocturnas));
+
+        var bytes = System.Text.Encoding.UTF8.GetBytes("﻿" + sb); // BOM para Excel
+        await JS.InvokeVoidAsync("downloadFile", $"nocturnidad_{_anio}-{_mes:00}.csv",
+            Convert.ToBase64String(bytes), "text/csv");
+    }
+
+    private static string Csv(string s) => s.Contains(';') || s.Contains('"')
+        ? "\"" + s.Replace("\"", "\"\"") + "\"" : s;
+
+    private static string NombreMes(int m) =>
+        System.Globalization.CultureInfo.GetCultureInfo("es-AR").DateTimeFormat.GetMonthName(m) is { } n
+            ? char.ToUpperInvariant(n[0]) + n[1..] : m.ToString();
+}

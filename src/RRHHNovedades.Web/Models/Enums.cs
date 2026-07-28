@@ -14,5 +14,6 @@ public enum EstadoJornada
 public enum Turno
 {
     Manana,
-    Tarde
+    Tarde,
+    Noche // Al final: no renumerar (se persiste como int). Se asigna por segmentación "Turno" de Humand.
 }

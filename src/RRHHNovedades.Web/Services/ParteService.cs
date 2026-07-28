@@ -55,7 +55,12 @@ public class ParteService(
         var ausentes = Nombres(novedades, EstadoJornada.AusenteInjustificado);
         var justificados = Nombres(novedades, EstadoJornada.AusenteJustificado);
 
-        var turnoTxt = turno == Turno.Manana ? "Turno Mañana" : "Turno Tarde";
+        var turnoTxt = turno switch
+        {
+            Turno.Manana => "Turno Mañana",
+            Turno.Tarde => "Turno Tarde",
+            _ => "Turno Noche"
+        };
         var tituloVar = $"{turnoTxt} · {fecha:dd/MM/yyyy}";          // variable {{1}}
         var encabezado = $"Novedades RR. HH. — {tituloVar}";
 

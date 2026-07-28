@@ -16,6 +16,8 @@ public class MockHumandService : IHumandService
         new("EMP-006", "Sofía",  "Vega",      "+5491166666666", "Ventas"),
         new("EMP-007", "Carla",  "López",     "+5491177777777", "Ventas"),
         new("EMP-008", "Diego",  "Fernández", "+5491188888888", "Producción"),
+        new("EMP-009", "Nadia",  "Molina",    "+5491199999999", "Producción", "Turno C Noche"),
+        new("EMP-010", "Bruno",  "Acosta",    "+5491100000000", "Producción", "Turno C Noche"),
     ];
 
     public Task<IReadOnlyList<EmpleadoHumand>> ObtenerEmpleadosAsync(CancellationToken ct = default) =>
@@ -46,6 +48,8 @@ public class MockHumandService : IHumandService
                 "EMP-006" => J(e.EmployeeInternalId, new TimeOnly(14, 0), [], [], new TimeOnly(14, 3)),      // Presente (tarde turno)
                 "EMP-007" => J(e.EmployeeInternalId, new TimeOnly(14, 0), ["LATE"], [], new TimeOnly(14, 40)),// Tarde (turno tarde)
                 "EMP-008" => J(e.EmployeeInternalId, null, [], [], null, workday: false, schedule: false),  // Franco
+                "EMP-009" => J(e.EmployeeInternalId, new TimeOnly(22, 0), [], [], new TimeOnly(21, 58)),     // Presente (noche; salida cruza medianoche: 05:58)
+                "EMP-010" => J(e.EmployeeInternalId, new TimeOnly(22, 0), ["LATE"], [], new TimeOnly(22, 20)),// Tarde (turno noche)
                 _ => J(e.EmployeeInternalId, t8, [], [], t8)
             });
         }
