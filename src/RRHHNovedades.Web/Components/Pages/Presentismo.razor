@@ -52,6 +52,10 @@
 
 <MudPaper Class="mt-3" Elevation="1" Style="overflow-x:auto;">
     <MudTable T="PresentismoEmpleado" Items="_filtradas" Dense="true" Hover="true" Loading="_loading" Breakpoint="Breakpoint.None">
+        <ToolBarContent>
+            <MudTextField @bind-Value="_buscar" Placeholder="Buscar por nombre, legajo o área" Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Small" Class="mt-0" Immediate="true" />
+        </ToolBarContent>
         <NoRecordsContent>
             <MudText Class="pa-4">
                 Sin datos del período @PeriodoTexto()@(_area is null ? "" : $" para {_area}").
@@ -105,8 +109,18 @@
     private List<string> _areas = [];
     private bool _loading = true;
     private IReadOnlyList<PresentismoEmpleado> _filas = [];
+    private string _buscar = string.Empty;
     private List<PresentismoEmpleado> _filtradas =>
-        _filas.Where(f => _area is null || f.Area == _area).ToList();
+        _filas.Where(f => (_area is null || f.Area == _area) && PasaBusqueda(f)).ToList();
+
+    private bool PasaBusqueda(PresentismoEmpleado f)
+    {
+        if (string.IsNullOrWhiteSpace(_buscar)) return true;
+        var q = _buscar.Trim().ToLowerInvariant();
+        return f.ApellidoNombre.ToLowerInvariant().Contains(q)
+            || (f.Legajo ?? "").ToLowerInvariant().Contains(q)
+            || (f.Area ?? "").ToLowerInvariant().Contains(q);
+    }
 
     private bool _syncing;
     private string _syncMsg = string.Empty;

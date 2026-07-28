@@ -86,6 +86,10 @@
 <MudPaper Class="mt-3" Elevation="1">
     <MudTable T="NocturnidadEmpleado" Items="_filtradas" Dense="true" Hover="true" Loading="_loading" Breakpoint="Breakpoint.Sm"
               OnRowClick="@(args => AbrirDetalle(args.Item))" RowClass="cursor-pointer">
+        <ToolBarContent>
+            <MudTextField @bind-Value="_buscar" Placeholder="Buscar por nombre o área" Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Small" Class="mt-0" Immediate="true" />
+        </ToolBarContent>
         <NoRecordsContent>
             <MudText>Sin horas nocturnas registradas en @NombreMes(_mes) @_anio@(_area is null ? "" : $" para {_area}").</MudText>
         </NoRecordsContent>
@@ -154,8 +158,16 @@
     private List<string> _areas = [];
     private bool _loading = true;
     private IReadOnlyList<NocturnidadEmpleado> _filas = [];
+    private string _buscar = string.Empty;
     private List<NocturnidadEmpleado> _filtradas =>
-        _filas.Where(f => _area is null || f.Area == _area).ToList();
+        _filas.Where(f => (_area is null || f.Area == _area) && PasaBusqueda(f.ApellidoNombre, f.Area)).ToList();
+
+    private bool PasaBusqueda(string nombre, string? area)
+    {
+        if (string.IsNullOrWhiteSpace(_buscar)) return true;
+        var q = _buscar.Trim().ToLowerInvariant();
+        return nombre.ToLowerInvariant().Contains(q) || (area ?? "").ToLowerInvariant().Contains(q);
+    }
 
     // Detalle por empleado
     private bool _detVisible;
