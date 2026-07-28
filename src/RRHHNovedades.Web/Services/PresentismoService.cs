@@ -48,12 +48,14 @@ public interface IPresentismoService
 }
 
 /// <summary>
-/// Planilla de presentismo del período de liquidación. Cada día del período cae en UN bucket:
-/// feriado > trabajado (fichó) > licencia justificada (por tipo de solicitud de Humand) >
-/// injustificada. Francos/pendientes no cuentan.
+/// Planilla de presentismo del período de liquidación (26 al 25).
 /// Reglas (definidas con RRHH, 28-jul-2026):
+///   La base del mes es SIEMPRE 30 días, sin importar las fichadas.
+///   CANT. DIAS TRABAJADOS = 30 − feriados − todas las ausencias (las columnas suman 30).
+///   Las ausencias salen de Humand: feriado > licencia por tipo de solicitud > injustificada
+///   (un día cuenta una sola vez; francos y fichadas no alteran la base).
 ///   TOTAL INASISTENCIA = injustificadas + todas las licencias.
-///   TOTAL DÍAS LIQUIDADOS = trabajados + feriados + licencias pagas (todo menos injustificadas y sin goce).
+///   TOTAL DÍAS LIQUIDADOS = 30 − injustificadas − sin goce (justificadas y vacaciones se pagan).
 ///   PPP = "DESCONTAR" si hay al menos 1 injustificada; si no "Si".
 /// </summary>
 public class PresentismoService(
@@ -82,17 +84,20 @@ public class PresentismoService(
             .ToList();
     }
 
+    /// <summary>Base mensual fija de la liquidación: siempre 30 días, sin importar fichadas.</summary>
+    internal const int BaseDias = 30;
+
     private static PresentismoEmpleado ArmarFila(Empleado emp, List<NovedadDiaria> dias, int horasNocturnas)
     {
-        int trabajados = 0, feriados = 0, injustificadas = 0;
+        int feriados = 0, injustificadas = 0;
         var lic = new Dictionary<TipoLicencia, int>();
         var obs = new List<string>();
 
         foreach (var d in dias)
         {
-            // Un bucket por día: feriado > trabajado > licencia > injustificada.
+            // Un día cuenta una sola vez: feriado > licencia > injustificada. Las fichadas y los
+            // francos no alteran la base (los días trabajados salen por resta de la base 30).
             if (d.EsFeriado) { feriados++; continue; }
-            if (d.Estado is EstadoJornada.Presente or EstadoJornada.Tarde) { trabajados++; continue; }
             if (d.Estado == EstadoJornada.AusenteJustificado)
             {
                 var tipo = ClasificarMotivo(d.MotivoNovedad);
@@ -100,7 +105,6 @@ public class PresentismoService(
                 continue;
             }
             if (d.Estado == EstadoJornada.AusenteInjustificado) injustificadas++;
-            // Franco / Pendiente: no cuentan.
         }
 
         // Observación: rangos consecutivos por motivo (ej. "Vacaciones 20/07 al 26/07") + injustificadas.
@@ -117,7 +121,10 @@ public class PresentismoService(
         int vacaciones = lic.GetValueOrDefault(TipoLicencia.Vacaciones);
 
         int totalInasistencia = injustificadas + enfermedad + sinGoce + conGoce + especial + accidente + vacaciones;
-        int totalLiquidados = trabajados + feriados + enfermedad + conGoce + especial + accidente + vacaciones;
+        // Base 30 fija: trabajados por resta (las columnas suman 30) y liquidados solo pierde
+        // las no pagas (injustificadas y sin goce).
+        int trabajados = Math.Max(0, BaseDias - feriados - totalInasistencia);
+        int totalLiquidados = Math.Max(0, BaseDias - injustificadas - sinGoce);
 
         return new PresentismoEmpleado(
             emp.Id, emp.Legajo, emp.ApellidoNombre, emp.Area,

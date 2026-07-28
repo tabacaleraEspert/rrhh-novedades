@@ -79,7 +79,7 @@ public class PresentismoServiceTests
         var fila = Assert.Single(await svc.ReporteMensualAsync(2026, 7));
 
         Assert.Equal("871", fila.Legajo);
-        Assert.Equal(2, fila.Trabajados);
+        Assert.Equal(30 - 1 - 4, fila.Trabajados);             // base 30 − feriado − 4 ausencias (fichadas no importan)
         Assert.Equal(1, fila.Feriados);
         Assert.Equal(1, fila.Injustificadas);
         Assert.Equal(2, fila.Vacaciones);
@@ -87,7 +87,7 @@ public class PresentismoServiceTests
         Assert.Equal(8, fila.HorasNocturnas);                  // la noche del 1/7 (22→06)
         Assert.Equal("DESCONTAR", fila.Ppp);                   // tuvo 1 injustificada
         Assert.Equal(4, fila.TotalInasistencia);               // 1 injust + 2 vac + 1 enf
-        Assert.Equal(2 + 1 + 2 + 1, fila.TotalLiquidados);     // trab + feriado + pagas (sin la injustificada)
+        Assert.Equal(30 - 1, fila.TotalLiquidados);            // base 30 − injustificada (justificadas se pagan)
         Assert.Contains("Vacaciones 13/07 al 14/07", fila.Observacion);
         Assert.Contains("Injustificada 10/07", fila.Observacion);
     }
@@ -106,7 +106,8 @@ public class PresentismoServiceTests
 
         var fila = Assert.Single(await svc.ReporteMensualAsync(2026, 7));
         Assert.Equal("Si", fila.Ppp);
-        Assert.Equal(1, fila.TotalLiquidados);
+        Assert.Equal(30, fila.Trabajados);       // sin ausencias ni feriados: base completa
+        Assert.Equal(30, fila.TotalLiquidados);
         Assert.Equal(0, fila.TotalInasistencia);
     }
 
@@ -122,9 +123,9 @@ public class PresentismoServiceTests
         Assert.Equal("LEGAJOS", ws.Cell(1, 1).GetString());
         Assert.Equal("TOTAL DIAS LIQUIDADOS", ws.Cell(1, 16).GetString());
         Assert.Equal("871", ws.Cell(2, 1).GetString());
-        Assert.Equal(2, ws.Cell(2, 3).GetValue<int>());        // trabajados
+        Assert.Equal(25, ws.Cell(2, 3).GetValue<int>());       // trabajados = 30 − 1 feriado − 4 ausencias
         Assert.Equal("DESCONTAR", ws.Cell(2, 14).GetString()); // PPP
-        Assert.Equal(6, ws.Cell(2, 16).GetValue<int>());       // días liquidados
+        Assert.Equal(29, ws.Cell(2, 16).GetValue<int>());      // días liquidados = 30 − 1 injustificada
         Assert.Equal("", ws.Cell(2, 7).GetString());           // sin goce en 0 ⇒ vacío como la planilla original
     }
 }
