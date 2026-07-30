@@ -36,12 +36,16 @@ cd src/RRHHNovedades.Web && dotnet ef database update
 ```
 src/RRHHNovedades.Web/
 ├── Components/Pages/     → Home (dashboard), Mensajes (panel del bot),
+│                           Presentismo (planilla 26→25), Nocturnidad (hs 21-06),
+│                           Ausentismo (rango, día/semana/mes + licencias manuales),
 │                           Empleados, Configuracion, Ayuda (manual de uso),
 │                           Login, Error, NotFound
 ├── Components/Layout/    → MainLayout, EmptyLayout, NavMenu
 ├── Services/             → IHumandService (HumandService / MockHumandService),
-│                           IngestaService (sync+clasificación), ParteService (arma+envía),
-│                           ParteScheduler (BackgroundService 07/14h), TwilioService
+│                           IngestaService (sync+clasificación+overlay licencias manuales),
+│                           ParteService (arma+envía), ParteScheduler (06/07/14h),
+│                           PresentismoService, NocturnidadService, AusentismoService,
+│                           LicenciaManualService, TwilioService
 ├── Options/              → AsistenciaOptions, HumandOptions, TwilioOptions
 ├── Data/                 → AppDbContext + SeedData
 ├── Models/               → Usuario, Empleado, NovedadDiaria, DestinatarioParte, EnvioParte, Enums
@@ -51,11 +55,14 @@ src/RRHHNovedades.Web/
 tests/RRHHNovedades.Tests/  → ParteServiceTests (formato del parte)
 ```
 
-## Estado actual (9-jun-2026)
-Núcleo del MVP implementado y probado end-to-end con datos mock (`Humand:UseMock=true`):
-ingesta → clasificación → bot (2 partes diarios) → dashboard. Compila sin warnings, tests verdes.
-Pendiente para producción: credenciales Twilio + template aprobado (`Twilio:ContentSidParte`) y
-API key de Humand (`Humand:ApiKey`, `UseMock=false`). Plan vivo en `docs/PENDIENTES.md`.
+## Estado actual (30-jul-2026)
+**EN PRODUCCIÓN** (Azure Container Apps `ca-rrhh-prod`, CI/CD auto en push a main: build ACR +
+deploy + smoke). Bot con 3 partes diarios (06/07/14h) por WhatsApp real, dashboard, Presentismo
+(liquidación 26→25), Nocturnidad, **Ausentismo** (rango calendario, % justificadas/injustificadas,
+tasa, Excel/PDF) y **licencias manuales** ("reserva de puesto": justifican injustificadas de Humand,
+retroactivo + ingesta, tabla `LicenciasManuales` + `Novedades.EsManual`). Bitácora completa y
+pendientes en `docs/PENDIENTES.md`. ⚠️ Todo cambio de esquema requiere DDL manual en prod ANTES
+del push (`infra/run-ddl.sh`, ver `docs/DEPLOY-AZURE.md`) porque se usa `EnsureCreated`.
 
 ## Flujo del bot (lo principal)
 `ParteScheduler` dispara a las 07:00 (mañana) y 14:00 (tarde) — horarios en `Asistencia` (appsettings).

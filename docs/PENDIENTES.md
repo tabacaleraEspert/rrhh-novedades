@@ -18,6 +18,23 @@ Plan de ejecución por etapas. Base funcional: `docs/Novedades_RRHH.pdf` (spec v
 > segmentación "Turno" de Humand (ítem con "Noche"); página **Nocturnidad** con el reporte mensual
 > de horas 21–06 (fichadas reales, redondeo por noche: ≥45 min ⇒ hora arriba) y export CSV.
 > ⚠️ Antes de deployar: correr el `ALTER TABLE` de `docs/DEPLOY-AZURE.md` §Turno noche.
+>
+> **Novedad (30-jul-2026): Ausentismo + licencias manuales** ✅ — TODO EN PROD (imagen `d08ca94`).
+> - Página **Ausentismo** (`/ausentismo`): ausencias por día/semana lunes-dom/mes calendario con
+>   nominal y % de justificadas vs injustificadas + tasa sobre jornadas esperadas; detalle por
+>   ausencia; Excel 2 hojas (Resumen/Detalle); vista imprimible (browser → PDF); endpoints
+>   `/api/ops/ausentismo[.excel]`. Informe jun-jul 2026 entregado a RRHH (Excel + PDF).
+> - **Fechas futuras**: sync permitido; muestran las licencias ya cargadas en Humand ("Programada");
+>   el resto queda Pendiente. Fix: un día futuro ya NO clasifica AusenteInjustificado (test congelado).
+> - **Licencias manuales** (ej. "reserva de puesto"): alta desde Ausentismo con motivo libre
+>   reutilizable, hasta opcional (sin fin), retroactivo + overlay en cada ingesta (`EsManual`);
+>   el borrado revierte. Tabla `LicenciasManuales` + columna `Novedades.EsManual` — DDL APLICADO
+>   en prod el 30-jul-2026 (`infra/ddl-2026-07-30-licencias-manuales.sh`).
+> - UI: gráfico de tendencia del dashboard sin deformar (escala uniforme) y date pickers anclados
+>   a la derecha (no se cortan). Smoke test reparado (franco no-fichador según día hábil).
+> - Datos: junio tiene pocas justificadas la 1ª quincena (¿permisos no cargados en Humand en esa
+>   época?) — **validar con RRHH** antes de usar junio para decisiones.
+> - 104 tests verdes · smoke verde · CI/CD verdes.
 
 ---
 
