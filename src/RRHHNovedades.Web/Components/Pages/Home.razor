@@ -26,7 +26,8 @@
     </div>
     <div class="d-flex align-center gap-2 flex-wrap">
         <MudDatePicker Label="Fecha" Date="_fechaSel" DateChanged="OnFechaPicked" Style="max-width:160px;"
-                       DateFormat="dd/MM/yyyy" Editable="true" Margin="Margin.Dense" />
+                       DateFormat="dd/MM/yyyy" Editable="true" Margin="Margin.Dense"
+                       AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight" />
         <MudSelect T="string" Label="Área" Value="_area" ValueChanged="OnAreaChanged" Clearable="true"
                    Style="min-width:180px;" Margin="Margin.Dense" Dense="true">
             @foreach (var a in _areas)
@@ -317,28 +318,39 @@
             .ToList();
     }
 
-    // Geometría del gráfico SVG (viewBox 640x250; área de trazado x:[40,624] y:[26,208]).
+    // Geometría del gráfico SVG (viewBox 1000x300; área de trazado x:[50,974] y:[30,250]).
+    // Escala UNIFORME (preserveAspectRatio por defecto): el alto sale de la proporción del ancho,
+    // así el texto y los puntos nunca se deforman al estirar el panel.
     // Los helpers devuelven strings con punto decimal invariante (la cultura es-AR usa coma y rompe el SVG).
+    private const double ChW = 1000, ChH = 300, ChX0 = 50, ChX1 = 974, ChY0 = 30, ChY1 = 250;
     private double XVal(int i) =>
-        _tendencia.Count <= 1 ? 40 : 40 + i * (584.0 / (_tendencia.Count - 1));
-    private static double YVal(double pct) => 208 - pct / 100.0 * 182;
+        _tendencia.Count <= 1 ? ChX0 : ChX0 + i * ((ChX1 - ChX0) / (_tendencia.Count - 1));
+    private static double YVal(double pct) => ChY1 - pct / 100.0 * (ChY1 - ChY0);
     private static string Fmt(double v) => v.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture);
     private static readonly System.Globalization.CultureInfo EsAr = System.Globalization.CultureInfo.GetCultureInfo("es-AR");
 
     private string RenderTendenciaSvg()
     {
         var sb = new System.Text.StringBuilder();
-        sb.Append("<svg viewBox=\"0 0 640 250\" style=\"width:100%;height:235px;\" preserveAspectRatio=\"none\" class=\"tend-chart\">");
+        sb.Append($"<svg viewBox=\"0 0 {ChW} {ChH}\" style=\"width:100%;height:auto;display:block;\" class=\"tend-chart\">");
         foreach (var pct in new[] { 0, 25, 50, 75, 100 })
         {
             var gy = YVal(pct);
-            sb.Append($"<line x1=\"34\" y1=\"{Fmt(gy)}\" x2=\"630\" y2=\"{Fmt(gy)}\" stroke=\"#E0E1E2\" stroke-width=\"1\" stroke-dasharray=\"3 3\" />");
-            sb.Append($"<text x=\"28\" y=\"{Fmt(gy + 4)}\" text-anchor=\"end\" font-size=\"10\" fill=\"#97999B\">{pct}</text>");
+            sb.Append($"<line x1=\"{Fmt(ChX0 - 6)}\" y1=\"{Fmt(gy)}\" x2=\"{Fmt(ChX1 + 6)}\" y2=\"{Fmt(gy)}\" stroke=\"#ECEDEE\" stroke-width=\"1\" />");
+            sb.Append($"<text x=\"{Fmt(ChX0 - 12)}\" y=\"{Fmt(gy + 4)}\" text-anchor=\"end\" font-size=\"12\" fill=\"#97999B\">{pct}{(pct == 100 ? "%" : "")}</text>");
         }
         var puntos = string.Join(" ", _tendencia.Select((p, i) => $"{Fmt(XVal(i))},{Fmt(YVal(p.Pct))}"));
         sb.Append($"<polyline points=\"{puntos}\" fill=\"none\" stroke=\"#A48242\" stroke-width=\"2.5\" stroke-linejoin=\"round\" stroke-linecap=\"round\" />");
 
-        double banda = _tendencia.Count > 1 ? 584.0 / (_tendencia.Count - 1) : 584;
+        // Etiquetas selectivas (mínimo, máximo y último día); el resto se lee por hover.
+        var conEtiqueta = new HashSet<int> { _tendencia.Count - 1 };
+        if (_tendencia.Count > 2)
+        {
+            conEtiqueta.Add(_tendencia.IndexOf(_tendencia.MinBy(p => p.Pct)));
+            conEtiqueta.Add(_tendencia.IndexOf(_tendencia.MaxBy(p => p.Pct)));
+        }
+
+        double banda = _tendencia.Count > 1 ? (ChX1 - ChX0) / (_tendencia.Count - 1) : ChX1 - ChX0;
         for (int i = 0; i < _tendencia.Count; i++)
         {
             var p = _tendencia[i];
@@ -346,25 +358,28 @@
 
             // Etiqueta del eje X (cada 2 para no amontonar).
             if (i % 2 == 0 || _tendencia.Count <= 7)
-                sb.Append($"<text x=\"{Fmt(px)}\" y=\"244\" text-anchor=\"middle\" font-size=\"10\" fill=\"#53565A\">{p.Fecha:dd/MM}</text>");
+                sb.Append($"<text x=\"{Fmt(px)}\" y=\"{Fmt(ChH - 8)}\" text-anchor=\"middle\" font-size=\"12\" fill=\"#53565A\">{p.Fecha:dd/MM}</text>");
 
-            // Grupo interactivo: banda invisible de hover + crosshair + punto + etiqueta + tooltip.
+            // Grupo interactivo: banda invisible de hover + crosshair + punto + tooltip.
             sb.Append("<g class=\"tpt\">");
-            sb.Append($"<rect x=\"{Fmt(px - banda / 2)}\" y=\"0\" width=\"{Fmt(banda)}\" height=\"250\" fill=\"transparent\" />");
-            sb.Append($"<line class=\"ch\" x1=\"{Fmt(px)}\" y1=\"26\" x2=\"{Fmt(px)}\" y2=\"208\" stroke=\"#C4A866\" stroke-width=\"1\" stroke-dasharray=\"4 3\" />");
-            sb.Append($"<circle cx=\"{Fmt(px)}\" cy=\"{Fmt(py)}\" r=\"3.5\" fill=\"#A48242\" />");
-            sb.Append($"<circle class=\"halo\" cx=\"{Fmt(px)}\" cy=\"{Fmt(py)}\" r=\"6\" fill=\"none\" stroke=\"#A48242\" stroke-width=\"1.5\" />");
-            // Etiqueta de datos: el % siempre visible arriba del punto.
-            sb.Append($"<text x=\"{Fmt(px)}\" y=\"{Fmt(py - 9)}\" text-anchor=\"middle\" font-size=\"10\" font-weight=\"600\" fill=\"#53565A\">{p.Pct:0}%</text>");
+            sb.Append($"<rect x=\"{Fmt(px - banda / 2)}\" y=\"0\" width=\"{Fmt(banda)}\" height=\"{Fmt(ChH)}\" fill=\"transparent\" />");
+            sb.Append($"<line class=\"ch\" x1=\"{Fmt(px)}\" y1=\"{Fmt(ChY0)}\" x2=\"{Fmt(px)}\" y2=\"{Fmt(ChY1)}\" stroke=\"#C4A866\" stroke-width=\"1\" stroke-dasharray=\"4 3\" />");
+            sb.Append($"<circle cx=\"{Fmt(px)}\" cy=\"{Fmt(py)}\" r=\"4\" fill=\"#A48242\" stroke=\"#FFFFFF\" stroke-width=\"1.5\" />");
+            sb.Append($"<circle class=\"halo\" cx=\"{Fmt(px)}\" cy=\"{Fmt(py)}\" r=\"7.5\" fill=\"none\" stroke=\"#A48242\" stroke-width=\"1.5\" />");
+            if (conEtiqueta.Contains(i))
+            {
+                bool abajo = py - 14 < ChY0 + 12; // cerca del techo la etiqueta va debajo del punto
+                sb.Append($"<text x=\"{Fmt(px)}\" y=\"{Fmt(abajo ? py + 22 : py - 12)}\" text-anchor=\"middle\" font-size=\"12.5\" font-weight=\"600\" fill=\"#53565A\">{p.Pct:0}%</text>");
+            }
 
             // Tooltip: fecha, asistencia y ausentes del día.
-            double tx = px > 470 ? px - 156 : px + 12;
-            double ty = Math.Clamp(py - 74, 8, 160);
+            double tx = px > ChW - 200 ? px - 176 : px + 14;
+            double ty = Math.Clamp(py - 80, 10, ChH - 90);
             sb.Append("<g class=\"tip\">");
-            sb.Append($"<rect x=\"{Fmt(tx)}\" y=\"{Fmt(ty)}\" width=\"144\" height=\"62\" rx=\"6\" fill=\"#FFFFFF\" stroke=\"#E0E1E2\" />");
-            sb.Append($"<text x=\"{Fmt(tx + 10)}\" y=\"{Fmt(ty + 17)}\" font-size=\"11\" font-weight=\"600\" fill=\"#53565A\">{p.Fecha.ToString("ddd dd/MM", EsAr)}</text>");
-            sb.Append($"<text x=\"{Fmt(tx + 10)}\" y=\"{Fmt(ty + 34)}\" font-size=\"11\" fill=\"#53565A\">Asistencia: {p.Pct:0}% ({p.Asistieron}/{p.Esperados})</text>");
-            sb.Append($"<text x=\"{Fmt(tx + 10)}\" y=\"{Fmt(ty + 51)}\" font-size=\"11\" font-weight=\"600\" fill=\"{(p.Ausentes > 0 ? "#E11D48" : "#53565A")}\">Ausentes: {p.Ausentes}</text>");
+            sb.Append($"<rect x=\"{Fmt(tx)}\" y=\"{Fmt(ty)}\" width=\"162\" height=\"70\" rx=\"6\" fill=\"#FFFFFF\" stroke=\"#E0E1E2\" />");
+            sb.Append($"<text x=\"{Fmt(tx + 12)}\" y=\"{Fmt(ty + 20)}\" font-size=\"12.5\" font-weight=\"600\" fill=\"#53565A\">{p.Fecha.ToString("ddd dd/MM", EsAr)}</text>");
+            sb.Append($"<text x=\"{Fmt(tx + 12)}\" y=\"{Fmt(ty + 39)}\" font-size=\"12.5\" fill=\"#53565A\">Asistencia: {p.Pct:0}% ({p.Asistieron}/{p.Esperados})</text>");
+            sb.Append($"<text x=\"{Fmt(tx + 12)}\" y=\"{Fmt(ty + 58)}\" font-size=\"12.5\" font-weight=\"600\" fill=\"{(p.Ausentes > 0 ? "#E11D48" : "#53565A")}\">Ausentes: {p.Ausentes}</text>");
             sb.Append("</g></g>");
         }
         sb.Append("</svg>");
