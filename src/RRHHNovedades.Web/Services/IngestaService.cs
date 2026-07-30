@@ -100,6 +100,12 @@ public class IngestaService(
             .Distinct()
             .ToListAsync(ct)).ToHashSet();
 
+        // Licencias manuales de RRHH vigentes en la fecha: justifican lo que Humand marque
+        // injustificado (o pendiente futuro) con el motivo cargado a mano.
+        var manuales = await db.LicenciasManuales
+            .Where(l => l.Desde <= fecha && (l.Hasta == null || l.Hasta >= fecha))
+            .ToDictionaryAsync(l => l.EmpleadoId, l => l.Motivo, ct);
+
         int n = 0;
 
         foreach (var j in jornadas)
@@ -110,6 +116,14 @@ public class IngestaService(
             if (estado == EstadoJornada.FrancoNoLaborable
                 && EsPresentePorNoFichaje(fecha, j, feriadosCfg, esFichador: fichadores.Contains(emp.Id)))
                 estado = EstadoJornada.Presente;
+            bool esManual = false;
+            if (estado is EstadoJornada.AusenteInjustificado or EstadoJornada.Pendiente
+                && manuales.TryGetValue(emp.Id, out var motivoManual))
+            {
+                estado = EstadoJornada.AusenteJustificado;
+                motivo = motivoManual;
+                esManual = true;
+            }
             var turno = InferirTurno(j, emp, corte);
 
             if (!existentes.TryGetValue(emp.Id, out var nov))
@@ -123,6 +137,7 @@ public class IngestaService(
             nov.HoraEntrada = j.HoraEntrada;
             nov.HoraSalida = j.HoraSalida;
             nov.MotivoNovedad = motivo;
+            nov.EsManual = esManual;
             // Feriado: lo que marque Humand (hoy no cargan el calendario) + la lista de appsettings.
             nov.EsFeriado = j.EsFeriado || feriadosCfg.Contains(fecha);
             nov.ActualizadoUtc = DateTime.UtcNow;

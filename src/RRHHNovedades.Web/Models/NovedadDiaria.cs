@@ -27,6 +27,9 @@ public class NovedadDiaria
     /// <summary>El día era feriado según Humand (array `holidays` del day-summary). Para presentismo.</summary>
     public bool EsFeriado { get; set; }
 
+    /// <summary>Justificada por una <see cref="LicenciaManual"/> (no por un permiso de Humand).</summary>
+    public bool EsManual { get; set; }
+
     /// <summary>Última vez que se sincronizó/recalculó desde Humand.</summary>
     public DateTime ActualizadoUtc { get; set; }
 }

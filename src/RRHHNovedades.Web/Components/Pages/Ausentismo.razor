@@ -3,9 +3,11 @@
 @rendermode InteractiveServer
 @inject IAusentismoService AusentismoSrv
 @inject IIngestaService Ingesta
+@inject ILicenciaManualService LicSrv
 @inject IReloj Reloj
 @inject IJSRuntime JS
 @inject ISnackbar Snackbar
+@inject IDialogService DialogService
 @using RRHHNovedades.Web.Services
 
 <PageTitle>Ausentismo - RRHH</PageTitle>
@@ -51,6 +53,9 @@
                    OnClick="SincronizarPeriodo" Disabled="_syncing" title="Trae de Humand los días del rango elegido">
             @(_syncing ? _syncMsg : "Sincronizar período")
         </MudButton>
+        <MudButton Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.PostAdd"
+                   OnClick="ToggleFormLicencia" Color="@(_formLicencia ? Color.Primary : Color.Default)"
+                   title="Cargar a mano una licencia que no está en Humand (ej. reserva de puesto)">Agregar licencia</MudButton>
         <MudButton Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.Print"
                    OnClick="Imprimir" Disabled="@(_reporte is null || _syncing)"
                    title="Abre el diálogo de impresión: elegí 'Guardar como PDF' para exportar">Imprimir / PDF</MudButton>
@@ -58,6 +63,66 @@
                    OnClick="ExportarExcel" Disabled="@(_reporte is null || _syncing)">Excel</MudButton>
     </div>
 </div>
+
+@if (_formLicencia)
+{
+    <MudPaper Class="mt-3 pa-4 no-print" Elevation="1">
+        <MudText Typo="Typo.subtitle1" Style="font-weight:600;">Agregar licencia manual</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-2">
+            Justifica las faltas que Humand marque injustificadas para esa persona en el período,
+            con el motivo que escribas (los motivos ya usados se ofrecen para repetir). Sin "Hasta",
+            rige hasta que la elimines.
+        </MudText>
+        <div class="d-flex gap-3 flex-wrap align-center">
+            <MudAutocomplete T="EmpleadoOpcion" Label="Empleado" @bind-Value="_licEmpleado"
+                             SearchFunc="BuscarEmpleado" ToStringFunc="@(e => e?.ToString() ?? "")"
+                             Clearable="true" Margin="Margin.Dense" Style="min-width:280px;" MaxItems="15" />
+            <MudDatePicker Label="Desde" @bind-Date="_licDesdeDt" Margin="Margin.Dense"
+                           Style="min-width:140px;" DateFormat="dd/MM/yyyy" />
+            <MudDatePicker Label="Hasta (opcional)" @bind-Date="_licHastaDt" Margin="Margin.Dense"
+                           Style="min-width:150px;" DateFormat="dd/MM/yyyy" Clearable="true" />
+            <MudAutocomplete T="string" Label="Motivo" @bind-Value="_licMotivo"
+                             SearchFunc="BuscarMotivo" CoerceValue="true" CoerceText="false"
+                             Clearable="true" Margin="Margin.Dense" Style="min-width:220px;" MaxItems="10"
+                             Placeholder="Ej.: Reserva de puesto" />
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                       OnClick="GuardarLicencia" Disabled="_guardandoLic">Guardar</MudButton>
+            <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="@(() => _formLicencia = false)">Cancelar</MudButton>
+        </div>
+    </MudPaper>
+}
+
+@if (_licencias.Count > 0)
+{
+    <MudPaper Class="mt-3 no-print" Elevation="1" Style="overflow-x:auto;">
+        <MudText Typo="Typo.subtitle1" Class="pa-3 pb-0" Style="font-weight:600;">Licencias manuales vigentes</MudText>
+        <MudTable T="LicenciaManualVista" Items="_licencias" Dense="true" Hover="true" Breakpoint="Breakpoint.None">
+            <HeaderContent>
+                <MudTh>Legajo</MudTh>
+                <MudTh>Empleado</MudTh>
+                <MudTh>Área</MudTh>
+                <MudTh>Desde</MudTh>
+                <MudTh>Hasta</MudTh>
+                <MudTh>Motivo</MudTh>
+                <MudTh>Cargada por</MudTh>
+                <MudTh></MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd>@(context.Legajo ?? "—")</MudTd>
+                <MudTd Style="white-space:nowrap;">@context.ApellidoNombre</MudTd>
+                <MudTd Style="white-space:nowrap;">@(context.Area ?? "—")</MudTd>
+                <MudTd>@context.Desde.ToString("dd/MM/yyyy")</MudTd>
+                <MudTd>@(context.Hasta?.ToString("dd/MM/yyyy") ?? "—")</MudTd>
+                <MudTd>@context.Motivo</MudTd>
+                <MudTd>@context.CreadaPor</MudTd>
+                <MudTd>
+                    <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"
+                                   OnClick="@(() => EliminarLicencia(context))" title="Eliminar y revertir los días que justificó" />
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+    </MudPaper>
+}
 
 @if (_reporte is { } r)
 {
@@ -192,6 +257,7 @@ else if (_loading)
         var hoy = Reloj.Hoy;
         _desde = new DateOnly(hoy.Year, hoy.Month, 1);
         _hasta = _desde.AddMonths(1).AddDays(-1);
+        _licencias = await LicSrv.ListarAsync();
         await Cargar();
     }
 
@@ -299,4 +365,78 @@ else if (_loading)
     private static string Cero(int v) => v == 0 ? "—" : v.ToString();
     private static string Pct(double v) => v.ToString("P1", EsAr);
     private string RangoTexto() => $"{_desde:dd/MM/yyyy} al {_hasta:dd/MM/yyyy}";
+
+    // ── Licencias manuales ──
+
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private bool _formLicencia;
+    private bool _guardandoLic;
+    private IReadOnlyList<LicenciaManualVista> _licencias = [];
+    private IReadOnlyList<EmpleadoOpcion> _empleadosOpc = [];
+    private IReadOnlyList<string> _motivosOpc = [];
+    private EmpleadoOpcion? _licEmpleado;
+    private DateTime? _licDesdeDt;
+    private DateTime? _licHastaDt;
+    private string? _licMotivo;
+
+    private async Task ToggleFormLicencia()
+    {
+        _formLicencia = !_formLicencia;
+        if (_formLicencia && _empleadosOpc.Count == 0)
+        {
+            _empleadosOpc = await LicSrv.EmpleadosActivosAsync();
+            _motivosOpc = await LicSrv.MotivosAsync();
+            _licDesdeDt ??= Reloj.Hoy.ToDateTime(TimeOnly.MinValue);
+        }
+    }
+
+    private Task<IEnumerable<EmpleadoOpcion>> BuscarEmpleado(string? texto, CancellationToken _)
+    {
+        var q = (texto ?? "").Trim().ToLowerInvariant();
+        return Task.FromResult(_empleadosOpc.Where(e => q.Length == 0
+            || e.ApellidoNombre.ToLowerInvariant().Contains(q)
+            || (e.Legajo ?? "").ToLowerInvariant().Contains(q)));
+    }
+
+    private Task<IEnumerable<string>> BuscarMotivo(string? texto, CancellationToken _)
+    {
+        var q = (texto ?? "").Trim().ToLowerInvariant();
+        return Task.FromResult(_motivosOpc.Where(m => q.Length == 0 || m.ToLowerInvariant().Contains(q)));
+    }
+
+    private async Task GuardarLicencia()
+    {
+        if (_licEmpleado is null || _licDesdeDt is null || string.IsNullOrWhiteSpace(_licMotivo))
+        {
+            Snackbar.Add("Faltan datos: empleado, desde y motivo son obligatorios.", Severity.Warning);
+            return;
+        }
+        _guardandoLic = true;
+        try
+        {
+            var quien = (await (AuthState ?? Task.FromResult<AuthenticationState>(null!)))?.User?.Identity?.Name ?? "—";
+            var retro = await LicSrv.CrearAsync(_licEmpleado.Id, DateOnly.FromDateTime(_licDesdeDt.Value),
+                _licHastaDt is null ? null : DateOnly.FromDateTime(_licHastaDt.Value), _licMotivo!, quien);
+            Snackbar.Add($"Licencia cargada para {_licEmpleado.ApellidoNombre}. {retro} día(s) ya registrados pasaron a justificados.", Severity.Success);
+            _licEmpleado = null; _licMotivo = null; _licHastaDt = null; _formLicencia = false;
+            _licencias = await LicSrv.ListarAsync();
+            _motivosOpc = await LicSrv.MotivosAsync();
+            await Cargar();
+        }
+        catch (Exception ex) { Snackbar.Add($"Error al guardar: {ex.Message}", Severity.Error); }
+        finally { _guardandoLic = false; }
+    }
+
+    private async Task EliminarLicencia(LicenciaManualVista lic)
+    {
+        var ok = await DialogService.ShowMessageBoxAsync("Eliminar licencia manual",
+            $"Se elimina \"{lic.Motivo}\" de {lic.ApellidoNombre} y los días que justificó vuelven a injustificados. ¿Continuar?",
+            yesText: "Eliminar", cancelText: "Cancelar");
+        if (ok != true) return;
+        var revertidos = await LicSrv.EliminarAsync(lic.Id);
+        Snackbar.Add($"Licencia eliminada. {revertidos} día(s) revertidos.", Severity.Info);
+        _licencias = await LicSrv.ListarAsync();
+        await Cargar();
+    }
 }

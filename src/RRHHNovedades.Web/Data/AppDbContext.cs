@@ -12,6 +12,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<EnvioParte> EnviosParte => Set<EnvioParte>();
     public DbSet<ConfiguracionParte> ConfiguracionParte => Set<ConfiguracionParte>();
     public DbSet<SsoTicketUsado> SsoTicketsUsados => Set<SsoTicketUsado>();
+    public DbSet<LicenciaManual> LicenciasManuales => Set<LicenciaManual>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -61,6 +62,14 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.Property(x => x.HoraParteManana).HasMaxLength(5);
             e.Property(x => x.HoraParteTarde).HasMaxLength(5);
             e.Property(x => x.HoraParteNoche).HasMaxLength(5);
+        });
+
+        modelBuilder.Entity<LicenciaManual>(e =>
+        {
+            e.HasIndex(x => x.EmpleadoId);
+            e.Property(x => x.Motivo).HasMaxLength(100);
+            e.Property(x => x.CreadaPor).HasMaxLength(120);
+            e.HasOne(x => x.Empleado).WithMany().HasForeignKey(x => x.EmpleadoId);
         });
 
         modelBuilder.Entity<SsoTicketUsado>(e =>
