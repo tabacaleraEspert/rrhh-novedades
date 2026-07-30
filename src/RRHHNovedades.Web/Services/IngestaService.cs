@@ -144,13 +144,15 @@ public class IngestaService(
         bool ficho = j.HoraEntrada is not null;
         var motivo = j.PermisosDelDia.Count > 0 ? string.Join(", ", j.PermisosDelDia) : null;
 
-        // ¿El turno todavía no arrancó? Solo aplica al día de HOY y si conocemos la hora teórica
-        // de entrada: antes de esa hora no fichó porque aún no le toca, no porque faltó.
+        // ¿El turno todavía no arrancó? Un día FUTURO nunca puede ser ausencia (nadie fichó porque
+        // no ocurrió); en el día de HOY, antes de la hora teórica de entrada no fichó porque aún
+        // no le toca, no porque faltó.
         bool turnoNoIniciado =
             ahora is { } a
-            && j.Fecha == DateOnly.FromDateTime(a.DateTime)
-            && j.InicioTeorico is { } inicio
-            && TimeOnly.FromDateTime(a.DateTime) < inicio;
+            && (j.Fecha > DateOnly.FromDateTime(a.DateTime)
+                || (j.Fecha == DateOnly.FromDateTime(a.DateTime)
+                    && j.InicioTeorico is { } inicio
+                    && TimeOnly.FromDateTime(a.DateTime) < inicio));
 
         // Permiso aprobado y no fichó ⇒ Justificado. Va ANTES que la regla de franco:
         // con permiso (vacaciones, etc.) Humand quita el horario del día (isWorkday/hasSchedule

@@ -132,6 +132,16 @@ public class ClasificadorJornadaTests
     }
 
     [Fact]
+    public void Dia_futuro_sin_fichada_es_Pendiente_no_Ausente()
+    {
+        // Bug encontrado en vivo (backfill 30-jul-2026): sincronizar un día FUTURO clasificaba a
+        // toda la dotación como AusenteInjustificado (nadie fichó porque el día no ocurrió).
+        // La jornada es del 9; "ahora" es del 8 → Pendiente, aun sin horario teórico.
+        var (estado, _, _) = IngestaService.Clasificar(Jornada(), AhoraAr(10, 30, dia: 8));
+        Assert.Equal(EstadoJornada.Pendiente, estado);
+    }
+
+    [Fact]
     public void Antes_del_turno_pero_con_ABSENT_de_Humand_respeta_Humand()
     {
         // Si Humand ya marcó ABSENT, mandamos eso aunque sea temprano (no lo pisamos con Pendiente).
