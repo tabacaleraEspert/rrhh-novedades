@@ -21,13 +21,19 @@
         <MudText Typo="Typo.body2" Color="Color.Secondary">
             Ausencias del rango elegido (@RangoTexto()): totales por día, semana y mes, con el
             reparto entre justificadas (licencias) e injustificadas y la tasa sobre la dotación.
+            @if (_hasta > Reloj.Hoy)
+            {
+                <text> En las fechas futuras se muestran solo las licencias ya cargadas en Humand (programadas).</text>
+            }
         </MudText>
     </div>
     <div class="d-flex align-center gap-2 flex-wrap">
         <MudDatePicker Label="Desde" Date="_desdeDt" DateChanged="OnDesdeChanged" Margin="Margin.Dense"
-                       Style="min-width:140px;" DateFormat="dd/MM/yyyy" />
+                       Style="min-width:140px;" DateFormat="dd/MM/yyyy"
+                       AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight" />
         <MudDatePicker Label="Hasta" Date="_hastaDt" DateChanged="OnHastaChanged" Margin="Margin.Dense"
-                       Style="min-width:140px;" DateFormat="dd/MM/yyyy" />
+                       Style="min-width:140px;" DateFormat="dd/MM/yyyy"
+                       AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight" />
         <MudMenu Label="Período" Variant="Variant.Outlined" Size="Size.Small" Dense="true"
                  EndIcon="@Icons.Material.Filled.KeyboardArrowDown">
             <MudMenuItem OnClick="@(() => Preset(new DateOnly(2026, 6, 1), new DateOnly(2026, 7, 31)))">Jun–Jul 2026</MudMenuItem>
@@ -135,8 +141,9 @@
                 <MudTd Style="white-space:nowrap;">@context.ApellidoNombre</MudTd>
                 <MudTd Style="white-space:nowrap;">@(context.Area ?? "—")</MudTd>
                 <MudTd>
-                    <MudChip T="string" Size="Size.Small" Color="@(context.Justificada ? Color.Success : Color.Warning)">
-                        @(context.Justificada ? "Justificada" : "Injustificada")
+                    <MudChip T="string" Size="Size.Small"
+                             Color="@(context.Justificada ? (context.Futura ? Color.Info : Color.Success) : Color.Warning)">
+                        @(context.Justificada ? (context.Futura ? "Programada" : "Justificada") : "Injustificada")
                     </MudChip>
                 </MudTd>
                 <MudTd>@(context.Motivo ?? "—")</MudTd>
@@ -261,10 +268,10 @@ else if (_loading)
     private async Task Imprimir() => await JS.InvokeVoidAsync("window.print");
 
     // Igual patrón que Presentismo: para períodos viejos sin datos, trae cada día desde Humand.
+    // Fechas futuras incluidas: traen las licencias ya pedidas (el resto queda Pendiente).
     private async Task SincronizarPeriodo()
     {
-        var hasta = _hasta > Reloj.Hoy ? Reloj.Hoy : _hasta;
-        if (_desde > Reloj.Hoy) { Snackbar.Add("Ese período todavía no empezó.", Severity.Warning); return; }
+        var hasta = _hasta;
         if (hasta.DayNumber - _desde.DayNumber + 1 > MaxDiasSync)
         {
             Snackbar.Add($"El rango es muy largo para sincronizar de una ({MaxDiasSync} días máximo). Achicalo y repetí.", Severity.Warning);

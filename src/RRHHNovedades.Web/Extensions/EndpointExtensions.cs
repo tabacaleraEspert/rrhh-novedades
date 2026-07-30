@@ -183,9 +183,9 @@ public static class EndpointExtensions
         });
 
         // Backfill: sincroniza un rango de fechas (máx. 31 días) para histórico/tendencia.
-        ops.MapPost("/sync-rango", async (IIngestaService ingesta, IReloj reloj, DateOnly desde, DateOnly hasta, CancellationToken ct) =>
+        // Fechas futuras permitidas: traen las licencias ya cargadas en Humand (el resto queda Pendiente).
+        ops.MapPost("/sync-rango", async (IIngestaService ingesta, DateOnly desde, DateOnly hasta, CancellationToken ct) =>
         {
-            if (hasta > reloj.Hoy) hasta = reloj.Hoy; // un día futuro no tiene nada que ingestar
             if (hasta < desde) return Results.BadRequest(new { error = "hasta < desde" });
             if (hasta.DayNumber - desde.DayNumber > 31) return Results.BadRequest(new { error = "máximo 31 días por corrida" });
 

@@ -14,7 +14,8 @@ public record AusentismoDetalle(
     string ApellidoNombre,
     string? Area,
     bool Justificada,
-    string? Motivo); // primer tipo de licencia de Humand; null en injustificadas
+    string? Motivo,  // primer tipo de licencia de Humand; null en injustificadas
+    bool Futura);    // fecha posterior a hoy: licencia ya cargada en Humand ("programada")
 
 /// <summary>Agregado de un bucket (día, semana o mes). Los % se calculan sobre el total de ausencias.</summary>
 public record AusentismoAgregado(
@@ -28,7 +29,7 @@ public record AusentismoAgregado(
     public int Total => Justificadas + Injustificadas;
     public double PctJustificadas => Total == 0 ? 0 : (double)Justificadas / Total;
     public double PctInjustificadas => Total == 0 ? 0 : (double)Injustificadas / Total;
-    /// <summary>Ausencias sobre jornadas evaluables del bucket (presentes + tardes + ausencias).</summary>
+    /// <summary>Ausencias sobre jornadas esperadas del bucket (presentes + tardes + pendientes + ausencias).</summary>
     public double TasaAusentismo => JornadasEvaluables == 0 ? 0 : (double)Total / JornadasEvaluables;
 }
 
@@ -55,10 +56,12 @@ public interface IAusentismoService
 ///   Ausencia = AusenteJustificado (cualquier licencia) o AusenteInjustificado, nunca en feriado
 ///   (misma precedencia feriado &gt; licencia que la planilla de presentismo).
 ///   Semanas de lunes a domingo, recortadas al rango consultado; meses calendario.
-///   Tasa de ausentismo = ausencias / jornadas evaluables (presente + tarde + ausencias del día;
-///   excluye francos y pendientes — es la dotación que debía trabajar, histórica, no la actual).
+///   Tasa de ausentismo = ausencias / jornadas esperadas (presente + tarde + pendiente + ausencias
+///   del día; excluye francos — es la dotación que debía/debe trabajar, histórica, no la actual).
+///   Fechas FUTURAS: solo aparecen las licencias ya cargadas en Humand (marcadas "programadas");
+///   el resto de la dotación queda Pendiente y solo engorda el denominador de la tasa.
 /// </summary>
-public class AusentismoService(IDbContextFactory<AppDbContext> dbFactory) : IAusentismoService
+public class AusentismoService(IDbContextFactory<AppDbContext> dbFactory, IReloj reloj) : IAusentismoService
 {
     private static readonly CultureInfo EsAr = CultureInfo.GetCultureInfo("es-AR");
 
@@ -76,16 +79,19 @@ public class AusentismoService(IDbContextFactory<AppDbContext> dbFactory) : IAus
             .OrderBy(n => n.Fecha).ThenBy(n => n.Empleado.Apellido).ThenBy(n => n.Empleado.Nombre)
             .ToListAsync(ct);
 
+        var hoy = reloj.Hoy;
         var detalle = ausencias.Select(n => new AusentismoDetalle(
             n.Fecha, n.EmpleadoId, n.Empleado.Legajo, n.Empleado.ApellidoNombre, n.Empleado.Area,
             n.Estado == EstadoJornada.AusenteJustificado,
             n.Estado == EstadoJornada.AusenteJustificado
                 ? PresentismoService.SepararTipos(n.MotivoNovedad).FirstOrDefault() ?? "Licencia"
-                : null)).ToList();
+                : null,
+            n.Fecha > hoy)).ToList();
 
         var evaluables = (await db.Novedades
             .Where(n => n.Fecha >= desde && n.Fecha <= hasta && !n.EsFeriado
                 && (n.Estado == EstadoJornada.Presente || n.Estado == EstadoJornada.Tarde
+                    || n.Estado == EstadoJornada.Pendiente
                     || n.Estado == EstadoJornada.AusenteJustificado || n.Estado == EstadoJornada.AusenteInjustificado)
                 && (area == null || n.Empleado.Area == area))
             .GroupBy(n => n.Fecha)
@@ -94,22 +100,24 @@ public class AusentismoService(IDbContextFactory<AppDbContext> dbFactory) : IAus
             .ToDictionary(x => x.Fecha, x => x.Count);
 
         return new AusentismoReporte(desde, hasta, detalle,
-            Agrupar(detalle, evaluables, desde, hasta, f => (f, f, f.ToString("ddd dd/MM", EsAr))),
+            Agrupar(detalle, evaluables, desde, hasta, f => (f, f, (a, _) => a.ToString("ddd dd/MM", EsAr))),
             Agrupar(detalle, evaluables, desde, hasta, BucketSemana),
             Agrupar(detalle, evaluables, desde, hasta, BucketMes));
     }
 
-    private static (DateOnly Ini, DateOnly Fin, string Etiqueta) BucketSemana(DateOnly f)
+    private static (DateOnly Ini, DateOnly Fin, Func<DateOnly, DateOnly, string> Etiqueta) BucketSemana(DateOnly f)
     {
         var lunes = f.AddDays(-(((int)f.DayOfWeek + 6) % 7));
-        return (lunes, lunes.AddDays(6), $"Sem {lunes:dd/MM} al {lunes.AddDays(6):dd/MM}");
+        // La etiqueta se arma con el tramo RECORTADO al rango consultado: si se pide solo julio,
+        // la semana que arranca el 29/06 se muestra "Sem 01/07 al 05/07" (nunca días de afuera).
+        return (lunes, lunes.AddDays(6), (a, b) => $"Sem {a:dd/MM} al {b:dd/MM}");
     }
 
-    private static (DateOnly Ini, DateOnly Fin, string Etiqueta) BucketMes(DateOnly f)
+    private static (DateOnly Ini, DateOnly Fin, Func<DateOnly, DateOnly, string> Etiqueta) BucketMes(DateOnly f)
     {
         var primero = new DateOnly(f.Year, f.Month, 1);
         var nombre = EsAr.DateTimeFormat.GetMonthName(f.Month);
-        return (primero, primero.AddMonths(1).AddDays(-1), $"{char.ToUpperInvariant(nombre[0])}{nombre[1..]} {f.Year}");
+        return (primero, primero.AddMonths(1).AddDays(-1), (_, _) => $"{char.ToUpperInvariant(nombre[0])}{nombre[1..]} {f.Year}");
     }
 
     /// <summary>
@@ -121,7 +129,7 @@ public class AusentismoService(IDbContextFactory<AppDbContext> dbFactory) : IAus
         IReadOnlyList<AusentismoDetalle> detalle,
         IReadOnlyDictionary<DateOnly, int> evaluablesPorDia,
         DateOnly desde, DateOnly hasta,
-        Func<DateOnly, (DateOnly Ini, DateOnly Fin, string Etiqueta)> bucket)
+        Func<DateOnly, (DateOnly Ini, DateOnly Fin, Func<DateOnly, DateOnly, string> Etiqueta)> bucket)
     {
         var porFecha = detalle.GroupBy(d => d.Fecha).ToDictionary(g => g.Key, g => g.ToList());
         var res = new List<AusentismoAgregado>();
@@ -142,7 +150,7 @@ public class AusentismoService(IDbContextFactory<AppDbContext> dbFactory) : IAus
                 }
                 evaluables += evaluablesPorDia.GetValueOrDefault(d);
             }
-            res.Add(new AusentismoAgregado(etiqueta, iniRec, finRec, just, injust, evaluables));
+            res.Add(new AusentismoAgregado(etiqueta(iniRec, finRec), iniRec, finRec, just, injust, evaluables));
             f = finRec.AddDays(1);
         }
         return res;
@@ -180,7 +188,7 @@ public class AusentismoService(IDbContextFactory<AppDbContext> dbFactory) : IAus
             wd.Cell(fd, 2).Value = d.Legajo ?? "—";
             wd.Cell(fd, 3).Value = d.ApellidoNombre;
             wd.Cell(fd, 4).Value = d.Area ?? "—";
-            wd.Cell(fd, 5).Value = d.Justificada ? "Justificada" : "Injustificada";
+            wd.Cell(fd, 5).Value = d.Justificada ? (d.Futura ? "Programada" : "Justificada") : "Injustificada";
             wd.Cell(fd, 6).Value = d.Motivo ?? "—";
             fd++;
         }

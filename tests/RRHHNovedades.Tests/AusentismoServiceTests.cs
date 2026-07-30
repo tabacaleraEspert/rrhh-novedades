@@ -23,6 +23,15 @@ public class AusentismoServiceTests
         }
     }
 
+    /// <summary>"Hoy" congelado al 30/07/2026 (el día del caso real que originó la regla de futuras).</summary>
+    private sealed class RelojFijo : IReloj
+    {
+        public DateTimeOffset Ahora => new(2026, 7, 30, 12, 0, 0, TimeSpan.FromHours(-3));
+        public DateOnly Hoy => new(2026, 7, 30);
+        public TimeOnly HoraActual => new(12, 0);
+        public DateTime EnLocal(DateTime utc) => utc;
+    }
+
     private static NovedadDiaria Dia(int empleadoId, DateOnly fecha, EstadoJornada e, string? motivo = null, bool feriado = false) =>
         new() { EmpleadoId = empleadoId, Fecha = fecha, Estado = e, MotivoNovedad = motivo, EsFeriado = feriado };
 
@@ -35,7 +44,7 @@ public class AusentismoServiceTests
             new Empleado { Id = 2, Nombre = "Bruno", Apellido = "Paz", Area = "Ventas", EmployeeInternalId = "2", Legajo = "455" });
         ctx.Novedades.AddRange(novedades);
         await ctx.SaveChangesAsync();
-        return new AusentismoService(factory);
+        return new AusentismoService(factory, new RelojFijo());
     }
 
     // ── Buckets ──
@@ -76,6 +85,7 @@ public class AusentismoServiceTests
         var ultima = r.PorSemana[^1];
         Assert.Equal(new DateOnly(2026, 7, 27), ultima.Desde);
         Assert.Equal(new DateOnly(2026, 7, 31), ultima.Hasta);
+        Assert.Equal("Sem 27/07 al 31/07", ultima.Etiqueta); // la etiqueta NUNCA muestra días de afuera del rango
         Assert.Equal(1, ultima.Total);
 
         // El rango completo queda cubierto sin huecos: 61 días.
@@ -179,6 +189,56 @@ public class AusentismoServiceTests
         Assert.Empty(r.Detalle);
         Assert.Equal(0, r.PorDia[0].Total);
         Assert.Equal(1, r.PorDia[0].JornadasEvaluables); // solo el presente de Ventas
+    }
+
+    [Fact]
+    public async Task Semana_recortada_por_el_desde_tampoco_muestra_dias_de_afuera()
+    {
+        // Rango "solo julio": la semana del lunes 29/06 se etiqueta desde el 01/07.
+        var svc = await SetupAsync(nameof(Semana_recortada_por_el_desde_tampoco_muestra_dias_de_afuera),
+            Dia(1, new(2026, 7, 1), EstadoJornada.AusenteInjustificado));
+
+        var r = await svc.ReporteAsync(new(2026, 7, 1), new(2026, 7, 31));
+
+        Assert.Equal("Sem 01/07 al 05/07", r.PorSemana[0].Etiqueta);
+        Assert.Equal(new DateOnly(2026, 7, 1), r.PorSemana[0].Desde);
+    }
+
+    // ── Fechas futuras: licencias ya pedidas en Humand ──
+
+    [Fact]
+    public async Task Licencia_futura_cuenta_como_justificada_y_se_marca_programada()
+    {
+        // Hoy (RelojFijo) = 30/07/2026. Vacaciones pedidas para el 03/08: cuentan y quedan Futura.
+        var svc = await SetupAsync(nameof(Licencia_futura_cuenta_como_justificada_y_se_marca_programada),
+            Dia(1, new(2026, 7, 29), EstadoJornada.AusenteJustificado, "Vacaciones"),
+            Dia(1, new(2026, 8, 3), EstadoJornada.AusenteJustificado, "Vacaciones"));
+
+        var r = await svc.ReporteAsync(new(2026, 7, 1), new(2026, 8, 31));
+
+        Assert.Equal(2, r.Detalle.Count);
+        Assert.False(r.Detalle.Single(d => d.Fecha == new DateOnly(2026, 7, 29)).Futura);
+        Assert.True(r.Detalle.Single(d => d.Fecha == new DateOnly(2026, 8, 3)).Futura);
+        Assert.Equal(1, r.PorMes.Single(m => m.Etiqueta == "Agosto 2026").Justificadas);
+    }
+
+    [Fact]
+    public async Task Pendientes_engordan_el_denominador_de_la_tasa_pero_no_son_ausencia()
+    {
+        // Día futuro típico: 1 licencia programada + 3 pendientes → tasa 25%, no 100%.
+        var f = new DateOnly(2026, 8, 3);
+        var svc = await SetupAsync(nameof(Pendientes_engordan_el_denominador_de_la_tasa_pero_no_son_ausencia),
+            Dia(1, f, EstadoJornada.AusenteJustificado, "Vacaciones"),
+            Dia(2, f, EstadoJornada.Pendiente),
+            Dia(2, f.AddDays(1), EstadoJornada.Pendiente),
+            Dia(1, f.AddDays(1), EstadoJornada.Pendiente));
+
+        var r = await svc.ReporteAsync(f, f.AddDays(1));
+
+        var sem = Assert.Single(r.PorSemana);
+        Assert.Equal(1, sem.Total);
+        Assert.Equal(4, sem.JornadasEvaluables);
+        Assert.Equal(0.25, sem.TasaAusentismo);
     }
 
     // ── Excel ──
