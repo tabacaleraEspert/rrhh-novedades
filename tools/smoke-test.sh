@@ -81,10 +81,20 @@ check "10 novedades del día"      "$sync" '"novedades":10'
 echo "[4/5] Validando clasificación y parte (turno mañana)..."
 resumen=$(curl -s -b "$COOKIES" "$BASE/api/ops/resumen")
 check "resumen: total 10"              "$resumen" '"total":10'
-check "resumen: 3 presentes"           "$resumen" '"Presente":3'
+# El franco mock no ficha nunca: en día hábil cuenta como Presente (feat 3b1d2f4), el finde queda Franco.
+if [ "$(date +%u)" -ge 6 ]; then
+    check "resumen: 3 presentes"       "$resumen" '"Presente":3'
+    check "resumen: 1 franco"          "$resumen" '"FrancoNoLaborable":1'
+else
+    check "resumen: 4 presentes (franco no-fichador presente en día hábil)" "$resumen" '"Presente":4'
+    if echo "$resumen" | grep -qF 'FrancoNoLaborable'; then
+        rojo "  FAIL sin francos en día hábil — el franco no-fichador debía contar como Presente"; FALLOS=$((FALLOS+1))
+    else
+        verde "  OK   sin francos en día hábil"
+    fi
+fi
 check "resumen: 1 ausente injust."     "$resumen" '"AusenteInjustificado":1'
 check "resumen: 2 justificados"        "$resumen" '"AusenteJustificado":2'
-check "resumen: 1 franco"              "$resumen" '"FrancoNoLaborable":1'
 
 parte=$(curl -s -b "$COOKIES" "$BASE/api/ops/parte/preview?turno=Manana")
 check "parte: encabezado"              "$parte" "Novedades RR. HH."
@@ -123,7 +133,7 @@ replayc=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$BASE/api/auth/sso" -H
 [ "$replayc" = "401" ] && verde "  OK   replay del ticket → 401" || { rojo "  FAIL replay (HTTP $replayc, esperaba 401)"; FALLOS=$((FALLOS+1)); }
 
 echo "[5/5] Páginas clave responden..."
-for ruta in "/" "/ayuda" "/empleados" "/mensajes" "/nocturnidad"; do
+for ruta in "/" "/ayuda" "/empleados" "/mensajes" "/nocturnidad" "/ausentismo"; do
     pc=$(curl -s -b "$COOKIES" -o /dev/null -w "%{http_code}" "$BASE$ruta")
     [ "$pc" = "200" ] && verde "  OK   $ruta" || { rojo "  FAIL $ruta (HTTP $pc)"; FALLOS=$((FALLOS+1)); }
 done

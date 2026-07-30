@@ -136,6 +136,22 @@
 
     <MudExpansionPanel>
         <TitleContent>
+            <div class="d-flex align-center gap-2"><MudIcon Icon="@Icons.Material.Filled.EventBusy" Color="Color.Primary" /><MudText Style="font-weight:600;">Ausentismo (reporte por día, semana y mes)</MudText></div>
+        </TitleContent>
+        <ChildContent>
+            <MudList T="string" Dense="true">
+                <MudListItem T="string" Icon="@Icons.Material.Filled.TableChart">La página <b>Ausentismo</b> muestra, para el rango de fechas que elijas, cuántas ausencias hubo <b>por día, por semana y por mes</b>, separando <b>justificadas</b> (cualquier licencia: vacaciones, enfermedad, etc.) de <b>injustificadas</b>, con el porcentaje de cada una sobre el total de ausencias.</MudListItem>
+                <MudListItem T="string" Icon="@Icons.Material.Filled.Percent">La <b>tasa de ausentismo</b> compara las ausencias contra las <b>jornadas</b> que debían trabajarse ese período (presentes + tardanzas + ausencias; los francos y feriados no cuentan). Ej.: 8 ausencias sobre 180 jornadas = 4,4%.</MudListItem>
+                <MudListItem T="string" Icon="@Icons.Material.Filled.Rule">Un <b>feriado nunca cuenta como ausencia</b>, igual que en la planilla de Presentismo. Las <b>semanas van de lunes a domingo</b> y los meses son <b>meses calendario completos</b> (a diferencia de Presentismo/Nocturnidad, que liquidan del 26 al 25).</MudListItem>
+                <MudListItem T="string" Icon="@Icons.Material.Filled.ListAlt">La tabla <b>Detalle de ausencias</b> lista cada ausencia con fecha, legajo, empleado, área y motivo de la licencia. Tiene buscador por nombre, legajo, área o motivo.</MudListItem>
+                <MudListItem T="string" Icon="@Icons.Material.Filled.Download">El botón <b>Excel</b> descarga el reporte con dos hojas: <b>Resumen</b> (día/semana/mes con porcentajes) y <b>Detalle</b> (una fila por ausencia, con filtros). El botón <b>Imprimir / PDF</b> abre el diálogo de impresión del navegador: en "Destino" elegí <b>Guardar como PDF</b>.</MudListItem>
+                <MudListItem T="string" Icon="@Icons.Material.Filled.CloudSync">Para <b>períodos viejos</b> que aparezcan vacíos o incompletos: elegí el rango y tocá <b>Sincronizar período</b> — trae de Humand cada día del rango (tarda unos minutos si es largo).</MudListItem>
+            </MudList>
+        </ChildContent>
+    </MudExpansionPanel>
+
+    <MudExpansionPanel>
+        <TitleContent>
             <div class="d-flex align-center gap-2"><MudIcon Icon="@Icons.Material.Filled.Schedule" Color="Color.Primary" /><MudText Style="font-weight:600;">¿Cuándo se actualizan los datos?</MudText></div>
         </TitleContent>
         <ChildContent>
@@ -190,5 +206,5 @@
 
 @code {
     // Actualizar esta fecha cada vez que se modifique el manual (ver CLAUDE.md → "Manual de uso").
-    private const string UltimaActualizacion = "27/07/2026";
+    private const string UltimaActualizacion = "30/07/2026";
 }

@@ -183,8 +183,9 @@ public static class EndpointExtensions
         });
 
         // Backfill: sincroniza un rango de fechas (máx. 31 días) para histórico/tendencia.
-        ops.MapPost("/sync-rango", async (IIngestaService ingesta, DateOnly desde, DateOnly hasta, CancellationToken ct) =>
+        ops.MapPost("/sync-rango", async (IIngestaService ingesta, IReloj reloj, DateOnly desde, DateOnly hasta, CancellationToken ct) =>
         {
+            if (hasta > reloj.Hoy) hasta = reloj.Hoy; // un día futuro no tiene nada que ingestar
             if (hasta < desde) return Results.BadRequest(new { error = "hasta < desde" });
             if (hasta.DayNumber - desde.DayNumber > 31) return Results.BadRequest(new { error = "máximo 31 días por corrida" });
 
@@ -194,6 +195,21 @@ public static class EndpointExtensions
                 porDia[f.ToString("yyyy-MM-dd")] = await ingesta.SincronizarDiaAsync(f, ct);
 
             return Results.Ok(new { desde, hasta, dias = porDia.Count, novedadesPorDia = porDia });
+        });
+
+        // Reporte de ausentismo por rango (JSON y Excel), para automatización y descarga directa.
+        ops.MapGet("/ausentismo", async (IAusentismoService ausentismo, DateOnly desde, DateOnly hasta, string? area, CancellationToken ct) =>
+        {
+            if (hasta < desde) return Results.BadRequest(new { error = "hasta < desde" });
+            return Results.Ok(await ausentismo.ReporteAsync(desde, hasta, area, ct));
+        });
+
+        ops.MapGet("/ausentismo/excel", async (IAusentismoService ausentismo, DateOnly desde, DateOnly hasta, string? area, CancellationToken ct) =>
+        {
+            if (hasta < desde) return Results.BadRequest(new { error = "hasta < desde" });
+            var bytes = await ausentismo.ExcelAsync(desde, hasta, area, ct);
+            return Results.File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                $"ausentismo_{desde:yyyyMMdd}_{hasta:yyyyMMdd}.xlsx");
         });
 
         ops.MapPost("/parte", async (IParteService parte, IReloj reloj, Turno turno, DateOnly? fecha, CancellationToken ct) =>

@@ -130,3 +130,31 @@ h1:focus {
     padding: 0;
     justify-content: center;
 }
+
+/* Impresión (reportes → "Guardar como PDF" desde el browser) */
+.print-only {
+    display: none;
+}
+
+@media print {
+    .mud-drawer, .mud-appbar, .no-print {
+        display: none !important;
+    }
+
+    .mud-main-content {
+        padding: 0 !important;
+    }
+
+    .mud-paper {
+        box-shadow: none !important;
+        break-inside: avoid;
+    }
+
+    tr {
+        break-inside: avoid;
+    }
+
+    .print-only {
+        display: block;
+    }
+}

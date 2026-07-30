@@ -1,0 +1,295 @@
+@page "/ausentismo"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject IAusentismoService AusentismoSrv
+@inject IIngestaService Ingesta
+@inject IReloj Reloj
+@inject IJSRuntime JS
+@inject ISnackbar Snackbar
+@using RRHHNovedades.Web.Services
+
+<PageTitle>Ausentismo - RRHH</PageTitle>
+
+<div class="print-only mb-2">
+    <MudText Typo="Typo.h5" Style="font-weight:600;">Ausentismo — ESPERT</MudText>
+    <MudText Typo="Typo.body2">@RangoTexto()@(_area is null ? "" : $" — {_area}")</MudText>
+</div>
+
+<div class="d-flex align-center justify-space-between mb-1 flex-wrap gap-2 no-print">
+    <div>
+        <MudText Typo="Typo.h5" Style="font-weight:600;">Ausentismo</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary">
+            Ausencias del rango elegido (@RangoTexto()): totales por día, semana y mes, con el
+            reparto entre justificadas (licencias) e injustificadas y la tasa sobre la dotación.
+        </MudText>
+    </div>
+    <div class="d-flex align-center gap-2 flex-wrap">
+        <MudDatePicker Label="Desde" Date="_desdeDt" DateChanged="OnDesdeChanged" Margin="Margin.Dense"
+                       Style="min-width:140px;" DateFormat="dd/MM/yyyy" />
+        <MudDatePicker Label="Hasta" Date="_hastaDt" DateChanged="OnHastaChanged" Margin="Margin.Dense"
+                       Style="min-width:140px;" DateFormat="dd/MM/yyyy" />
+        <MudMenu Label="Período" Variant="Variant.Outlined" Size="Size.Small" Dense="true"
+                 EndIcon="@Icons.Material.Filled.KeyboardArrowDown">
+            <MudMenuItem OnClick="@(() => Preset(new DateOnly(2026, 6, 1), new DateOnly(2026, 7, 31)))">Jun–Jul 2026</MudMenuItem>
+            <MudMenuItem OnClick="@(() => PresetMes(0))">Mes actual</MudMenuItem>
+            <MudMenuItem OnClick="@(() => PresetMes(-1))">Mes anterior</MudMenuItem>
+        </MudMenu>
+        <MudSelect T="string" Label="Área" Value="_area" ValueChanged="OnAreaChanged" Clearable="true"
+                   Style="min-width:160px;" Margin="Margin.Dense" Dense="true">
+            @foreach (var a in _areas)
+            {
+                <MudSelectItem T="string" Value="@a">@a</MudSelectItem>
+            }
+        </MudSelect>
+        <MudButton Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.CloudSync"
+                   OnClick="SincronizarPeriodo" Disabled="_syncing" title="Trae de Humand los días del rango elegido">
+            @(_syncing ? _syncMsg : "Sincronizar período")
+        </MudButton>
+        <MudButton Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.Print"
+                   OnClick="Imprimir" Disabled="@(_reporte is null || _syncing)"
+                   title="Abre el diálogo de impresión: elegí 'Guardar como PDF' para exportar">Imprimir / PDF</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Filled.Download"
+                   OnClick="ExportarExcel" Disabled="@(_reporte is null || _syncing)">Excel</MudButton>
+    </div>
+</div>
+
+@if (_reporte is { } r)
+{
+    <div class="d-flex gap-3 mt-3 flex-wrap">
+        <MudPaper Class="pa-3 flex-grow-1" Elevation="1" Style="min-width:150px;">
+            <MudText Typo="Typo.overline" Color="Color.Secondary">Ausencias totales</MudText>
+            <MudText Typo="Typo.h5" Style="font-weight:600;">@TotalRango().Total</MudText>
+        </MudPaper>
+        <MudPaper Class="pa-3 flex-grow-1" Elevation="1" Style="min-width:150px;">
+            <MudText Typo="Typo.overline" Color="Color.Secondary">Justificadas</MudText>
+            <MudText Typo="Typo.h5" Style="font-weight:600;color:var(--mud-palette-success);">
+                @TotalRango().Justificadas <span style="font-size:0.6em;">(@Pct(TotalRango().PctJustificadas))</span>
+            </MudText>
+        </MudPaper>
+        <MudPaper Class="pa-3 flex-grow-1" Elevation="1" Style="min-width:150px;">
+            <MudText Typo="Typo.overline" Color="Color.Secondary">Injustificadas</MudText>
+            <MudText Typo="Typo.h5" Style="font-weight:600;color:var(--mud-palette-warning);">
+                @TotalRango().Injustificadas <span style="font-size:0.6em;">(@Pct(TotalRango().PctInjustificadas))</span>
+            </MudText>
+        </MudPaper>
+        <MudPaper Class="pa-3 flex-grow-1" Elevation="1" Style="min-width:150px;">
+            <MudText Typo="Typo.overline" Color="Color.Secondary">Tasa de ausentismo</MudText>
+            <MudText Typo="Typo.h5" Style="font-weight:600;">@Pct(TotalRango().TasaAusentismo)</MudText>
+        </MudPaper>
+    </div>
+
+    @foreach (var (titulo, datos) in new[] { ("Por mes", r.PorMes), ("Por semana", r.PorSemana), ("Por día", r.PorDia) })
+    {
+        <MudPaper Class="mt-3" Elevation="1" Style="overflow-x:auto;">
+            <MudText Typo="Typo.subtitle1" Class="pa-3 pb-0" Style="font-weight:600;">@titulo</MudText>
+            <MudTable T="AusentismoAgregado" Items="datos" Dense="true" Hover="true" Breakpoint="Breakpoint.None"
+                      Class="tabla-agregado">
+                <HeaderContent>
+                    <MudTh>Período</MudTh>
+                    <MudTh Style="text-align:right;">Justificadas</MudTh>
+                    <MudTh Style="text-align:right;">Injustificadas</MudTh>
+                    <MudTh Style="text-align:right;">Total</MudTh>
+                    <MudTh Style="text-align:right;">% Justif.</MudTh>
+                    <MudTh Style="text-align:right;">% Injustif.</MudTh>
+                    <MudTh Style="text-align:right;">Jornadas</MudTh>
+                    <MudTh Style="text-align:right;">Tasa</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd Style="white-space:nowrap;">@context.Etiqueta</MudTd>
+                    <MudTd Style="text-align:right;">@Cero(context.Justificadas)</MudTd>
+                    <MudTd Style="text-align:right;">@Cero(context.Injustificadas)</MudTd>
+                    <MudTd Style="text-align:right;font-weight:600;">@Cero(context.Total)</MudTd>
+                    <MudTd Style="text-align:right;">@(context.Total == 0 ? "—" : Pct(context.PctJustificadas))</MudTd>
+                    <MudTd Style="text-align:right;">@(context.Total == 0 ? "—" : Pct(context.PctInjustificadas))</MudTd>
+                    <MudTd Style="text-align:right;">@Cero(context.JornadasEvaluables)</MudTd>
+                    <MudTd Style="text-align:right;">@(context.JornadasEvaluables == 0 ? "—" : Pct(context.TasaAusentismo))</MudTd>
+                </RowTemplate>
+            </MudTable>
+        </MudPaper>
+    }
+
+    <MudPaper Class="mt-3" Elevation="1" Style="overflow-x:auto;">
+        <MudText Typo="Typo.subtitle1" Class="pa-3 pb-0" Style="font-weight:600;">Detalle de ausencias</MudText>
+        <MudTable T="AusentismoDetalle" Items="_detalleFiltrado" Dense="true" Hover="true" Loading="_loading" Breakpoint="Breakpoint.None">
+            <ToolBarContent>
+                <MudTextField @bind-Value="_buscar" Placeholder="Buscar por nombre, legajo, área o motivo" Adornment="Adornment.Start"
+                              AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Small" Class="mt-0 no-print" Immediate="true" />
+            </ToolBarContent>
+            <NoRecordsContent>
+                <MudText Class="pa-4">
+                    Sin ausencias en el rango @RangoTexto()@(_area is null ? "" : $" para {_area}").
+                    Si es un período viejo, tocá "Sincronizar período".
+                </MudText>
+            </NoRecordsContent>
+            <HeaderContent>
+                <MudTh>Fecha</MudTh>
+                <MudTh>Legajo</MudTh>
+                <MudTh>Empleado</MudTh>
+                <MudTh>Área</MudTh>
+                <MudTh>Estado</MudTh>
+                <MudTh>Motivo</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd Style="white-space:nowrap;">@context.Fecha.ToString("ddd dd/MM/yyyy", EsAr)</MudTd>
+                <MudTd>@(context.Legajo ?? "—")</MudTd>
+                <MudTd Style="white-space:nowrap;">@context.ApellidoNombre</MudTd>
+                <MudTd Style="white-space:nowrap;">@(context.Area ?? "—")</MudTd>
+                <MudTd>
+                    <MudChip T="string" Size="Size.Small" Color="@(context.Justificada ? Color.Success : Color.Warning)">
+                        @(context.Justificada ? "Justificada" : "Injustificada")
+                    </MudChip>
+                </MudTd>
+                <MudTd>@(context.Motivo ?? "—")</MudTd>
+            </RowTemplate>
+        </MudTable>
+    </MudPaper>
+}
+else if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Class="mt-4" Color="Color.Primary" />
+}
+
+@code {
+    private static readonly System.Globalization.CultureInfo EsAr = System.Globalization.CultureInfo.GetCultureInfo("es-AR");
+    private const int MaxDiasSync = 92;
+
+    private DateOnly _desde;
+    private DateOnly _hasta;
+    private string? _area;
+    private List<string> _areas = [];
+    private bool _loading = true;
+    private AusentismoReporte? _reporte;
+    private string _buscar = string.Empty;
+    private bool _syncing;
+    private string _syncMsg = string.Empty;
+
+    private DateTime? _desdeDt => _desde.ToDateTime(TimeOnly.MinValue);
+    private DateTime? _hastaDt => _hasta.ToDateTime(TimeOnly.MinValue);
+
+    private List<AusentismoDetalle> _detalleFiltrado =>
+        _reporte is null ? [] : _reporte.Detalle.Where(PasaBusqueda).ToList();
+
+    private bool PasaBusqueda(AusentismoDetalle d)
+    {
+        if (string.IsNullOrWhiteSpace(_buscar)) return true;
+        var q = _buscar.Trim().ToLowerInvariant();
+        return d.ApellidoNombre.ToLowerInvariant().Contains(q)
+            || (d.Legajo ?? "").ToLowerInvariant().Contains(q)
+            || (d.Area ?? "").ToLowerInvariant().Contains(q)
+            || (d.Motivo ?? "").ToLowerInvariant().Contains(q);
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Arranca en el mes calendario actual completo.
+        var hoy = Reloj.Hoy;
+        _desde = new DateOnly(hoy.Year, hoy.Month, 1);
+        _hasta = _desde.AddMonths(1).AddDays(-1);
+        await Cargar();
+    }
+
+    private async Task OnDesdeChanged(DateTime? d)
+    {
+        if (d is null) return;
+        _desde = DateOnly.FromDateTime(d.Value);
+        if (_hasta < _desde) _hasta = _desde;
+        await Cargar();
+    }
+
+    private async Task OnHastaChanged(DateTime? d)
+    {
+        if (d is null) return;
+        _hasta = DateOnly.FromDateTime(d.Value);
+        if (_hasta < _desde) _desde = _hasta;
+        await Cargar();
+    }
+
+    private async Task Preset(DateOnly desde, DateOnly hasta)
+    {
+        _desde = desde;
+        _hasta = hasta;
+        await Cargar();
+    }
+
+    private Task PresetMes(int offset)
+    {
+        var mes = new DateOnly(Reloj.Hoy.Year, Reloj.Hoy.Month, 1).AddMonths(offset);
+        return Preset(mes, mes.AddMonths(1).AddDays(-1));
+    }
+
+    private async Task OnAreaChanged(string? a)
+    {
+        _area = string.IsNullOrEmpty(a) ? null : a;
+        await Cargar();
+    }
+
+    private async Task Cargar()
+    {
+        _loading = true;
+        try
+        {
+            _reporte = await AusentismoSrv.ReporteAsync(_desde, _hasta, _area);
+            // La lista de áreas sale del reporte sin filtro (si filtramos, se conserva la anterior).
+            if (_area is null)
+                _areas = _reporte.Detalle.Select(d => d.Area).Where(a => !string.IsNullOrWhiteSpace(a))
+                    .Select(a => a!).Distinct().OrderBy(a => a).ToList();
+        }
+        catch (Exception ex)
+        {
+            _reporte = null;
+            Snackbar.Add($"Error al cargar: {ex.Message}", Severity.Error);
+        }
+        finally { _loading = false; }
+    }
+
+    // Totales de todo el rango: un solo bucket que suma los meses.
+    private AusentismoAgregado TotalRango()
+    {
+        var meses = _reporte!.PorMes;
+        return new AusentismoAgregado("Total", _desde, _hasta,
+            meses.Sum(m => m.Justificadas), meses.Sum(m => m.Injustificadas), meses.Sum(m => m.JornadasEvaluables));
+    }
+
+    private async Task ExportarExcel()
+    {
+        var bytes = await AusentismoSrv.ExcelAsync(_desde, _hasta, _area);
+        await JS.InvokeVoidAsync("downloadFile", $"ausentismo_{_desde:yyyyMMdd}_{_hasta:yyyyMMdd}.xlsx",
+            Convert.ToBase64String(bytes),
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    }
+
+    private async Task Imprimir() => await JS.InvokeVoidAsync("window.print");
+
+    // Igual patrón que Presentismo: para períodos viejos sin datos, trae cada día desde Humand.
+    private async Task SincronizarPeriodo()
+    {
+        var hasta = _hasta > Reloj.Hoy ? Reloj.Hoy : _hasta;
+        if (_desde > Reloj.Hoy) { Snackbar.Add("Ese período todavía no empezó.", Severity.Warning); return; }
+        if (hasta.DayNumber - _desde.DayNumber + 1 > MaxDiasSync)
+        {
+            Snackbar.Add($"El rango es muy largo para sincronizar de una ({MaxDiasSync} días máximo). Achicalo y repetí.", Severity.Warning);
+            return;
+        }
+
+        _syncing = true;
+        try
+        {
+            await Ingesta.SincronizarEmpleadosAsync();
+            int total = hasta.DayNumber - _desde.DayNumber + 1, i = 0;
+            for (var f = _desde; f <= hasta; f = f.AddDays(1))
+            {
+                _syncMsg = $"Sincronizando {++i}/{total}...";
+                StateHasChanged();
+                await Ingesta.SincronizarDiaAsync(f);
+            }
+            await Cargar();
+            Snackbar.Add($"Período sincronizado: {total} días desde Humand.", Severity.Success);
+        }
+        catch (Exception ex) { Snackbar.Add($"Error al sincronizar: {ex.Message}", Severity.Error); }
+        finally { _syncing = false; _syncMsg = string.Empty; }
+    }
+
+    private static string Cero(int v) => v == 0 ? "—" : v.ToString();
+    private static string Pct(double v) => v.ToString("P1", EsAr);
+    private string RangoTexto() => $"{_desde:dd/MM/yyyy} al {_hasta:dd/MM/yyyy}";
+}
