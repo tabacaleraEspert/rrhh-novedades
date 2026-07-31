@@ -27,6 +27,7 @@ HUMAND_API_KEY="<HUMAND_API_KEY>"      # rotar antes de prod
 TWILIO_ACCOUNT_SID="<TWILIO_ACCOUNT_SID>"
 TWILIO_AUTH_TOKEN="<TWILIO_AUTH_TOKEN>" # rotar antes de prod
 SSO_SHARED_SECRET="<SSO_SHARED_SECRET>" # HS256 compartido con el Command Center (mín. 32 chars)
+ASISTENTE_API_KEY="<ASISTENTE_API_KEY>" # API key de OpenAI del asistente IA (vacía = asistente off)
 # ---------------------------------------------------------------------------
 
 RG="rg-${PROJECT}-${ENVIRONMENT}"
@@ -79,6 +80,7 @@ az keyvault secret set --vault-name "$KV_NAME" --name "Humand--ApiKey"          
 az keyvault secret set --vault-name "$KV_NAME" --name "Twilio--AccountSid"        --value "$TWILIO_ACCOUNT_SID" -o none
 az keyvault secret set --vault-name "$KV_NAME" --name "Twilio--AuthToken"         --value "$TWILIO_AUTH_TOKEN" -o none
 az keyvault secret set --vault-name "$KV_NAME" --name "Sso--SharedSecret"         --value "$SSO_SHARED_SECRET" -o none
+az keyvault secret set --vault-name "$KV_NAME" --name "Asistente--ApiKey"         --value "$ASISTENTE_API_KEY" -o none
 
 # Reiniciar para que tome los secretos recién cargados (la 1ra revisión arrancó sin ellos).
 REV="$(az containerapp show -g "$RG" -n "$CA_NAME" --query properties.latestRevisionName -o tsv)"

@@ -23,11 +23,18 @@
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
     <PackageReference Include="MudBlazor" Version="9.4.0" />
+    <PackageReference Include="OpenAI" Version="2.12.0" />
     <PackageReference Include="Twilio" Version="7.14.9" />
   </ItemGroup>
 
   <ItemGroup>
     <InternalsVisibleTo Include="RRHHNovedades.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Conocimiento del asistente IA: se lee del disco en runtime. Sin esto no llega al
+         contenedor y el asistente degrada EN SILENCIO (el PromptBuilder solo loguea error). -->
+    <Content Include="Conocimiento\**\*.md" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

@@ -1,0 +1,242 @@
+@page "/asistente-uso"
+@attribute [Authorize(Roles = "Admin")]
+@rendermode InteractiveServer
+@using Microsoft.EntityFrameworkCore
+@using RRHHNovedades.Web.Data
+@using RRHHNovedades.Web.Models
+@using RRHHNovedades.Web.Services
+@using RRHHNovedades.Web.Services.Asistente
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject IRegistroTurnosService Registro
+@inject IReloj Reloj
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<PageTitle>Uso del asistente - RRHH</PageTitle>
+
+<div class="d-flex align-center justify-space-between mb-1 flex-wrap gap-2">
+    <div>
+        <MudText Typo="Typo.h5" Style="font-weight:600;">Uso del asistente</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary">
+            Qué se le preguntó, qué consultó y cuánto costó. La captura es de todos; esto lo ve solo Admin.
+        </MudText>
+    </div>
+    <div class="d-flex align-center gap-2 flex-wrap">
+        <MudDatePicker @bind-Date="_desde" Label="Desde" Margin="Margin.Dense" Variant="Variant.Outlined" DateFormat="dd/MM/yyyy" />
+        <MudDatePicker @bind-Date="_hasta" Label="Hasta" Margin="Margin.Dense" Variant="Variant.Outlined" DateFormat="dd/MM/yyyy" />
+        <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" OnClick="Cargar">Consultar</MudButton>
+        <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Secondary" OnClick="Purgar"
+                   StartIcon="@Icons.Material.Filled.CleaningServices">
+            Purgar textos +90 días
+        </MudButton>
+    </div>
+</div>
+
+@if (_cargando)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="my-4" />
+}
+else
+{
+    <MudGrid Spacing="2" Class="mb-2">
+        <MudItem xs="6" sm="3"><MudPaper Class="pa-3" Elevation="1">
+            <MudText Typo="Typo.caption" Color="Color.Secondary">Consultas</MudText>
+            <MudText Typo="Typo.h5" Style="font-weight:600;">@_turnos.Count</MudText>
+        </MudPaper></MudItem>
+        <MudItem xs="6" sm="3"><MudPaper Class="pa-3" Elevation="1">
+            <MudText Typo="Typo.caption" Color="Color.Secondary">Personas</MudText>
+            <MudText Typo="Typo.h5" Style="font-weight:600;">@_turnos.Select(t => t.UsuarioId).Distinct().Count()</MudText>
+        </MudPaper></MudItem>
+        <MudItem xs="6" sm="3"><MudPaper Class="pa-3" Elevation="1">
+            <MudText Typo="Typo.caption" Color="Color.Secondary">Costo del período</MudText>
+            <MudText Typo="Typo.h5" Style="font-weight:600;">US$ @_turnos.Sum(t => t.CostoUsd).ToString("0.00")</MudText>
+            <MudText Typo="Typo.caption" Color="Color.Secondary">≈ US$ @ProyeccionMensual().ToString("0.00")/mes</MudText>
+        </MudPaper></MudItem>
+        <MudItem xs="6" sm="3"><MudPaper Class="pa-3" Elevation="1">
+            <MudText Typo="Typo.caption" Color="Color.Secondary">Tokens cacheados</MudText>
+            <MudText Typo="Typo.h5" Style="font-weight:600;">@PctCacheados()</MudText>
+            <MudText Typo="Typo.caption" Color="Color.Secondary">bajo sostenido = caché roto</MudText>
+        </MudPaper></MudItem>
+    </MudGrid>
+
+    @if (_porHerramienta.Count > 0)
+    {
+        <MudPaper Class="pa-3 mb-2" Elevation="1">
+            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mb-1">Herramientas más usadas</MudText>
+            <div class="d-flex gap-2 flex-wrap">
+                @foreach (var (nombre, cant) in _porHerramienta)
+                {
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@nombre (@cant)</MudChip>
+                }
+            </div>
+        </MudPaper>
+    }
+
+    <MudPaper Elevation="1">
+        <MudTable T="AsistenteTurno" Items="_turnos" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm"
+                  OnRowClick="@(r => _expandido = _expandido == r.Item ? null : r.Item)"
+                  NoRecordsContent="@_sinDatos">
+            <HeaderContent>
+                <MudTh>Fecha</MudTh>
+                <MudTh>Usuario</MudTh>
+                <MudTh>Pregunta</MudTh>
+                <MudTh Style="text-align:right">Vueltas</MudTh>
+                <MudTh Style="text-align:right">Duración</MudTh>
+                <MudTh Style="text-align:right">Tokens (cache)</MudTh>
+                <MudTh Style="text-align:right">Costo</MudTh>
+                <MudTh>OK</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Fecha">@Reloj.EnLocal(context.CreadoUtc).ToString("dd/MM HH:mm")</MudTd>
+                <MudTd DataLabel="Usuario">@(_usuarios.GetValueOrDefault(context.UsuarioId) ?? "—")</MudTd>
+                <MudTd DataLabel="Pregunta" Style="max-width:340px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+                    @(context.Pregunta ?? "— (purgada)")
+                </MudTd>
+                <MudTd DataLabel="Vueltas" Style="text-align:right">@context.Vueltas</MudTd>
+                <MudTd DataLabel="Duración" Style="text-align:right">@((context.DuracionMs / 1000.0).ToString("0.0")) s</MudTd>
+                <MudTd DataLabel="Tokens" Style="text-align:right">@context.TokensEntrada.ToString("N0") (@context.TokensCacheados.ToString("N0"))</MudTd>
+                <MudTd DataLabel="Costo" Style="text-align:right">US$ @context.CostoUsd.ToString("0.000")</MudTd>
+                <MudTd DataLabel="OK">
+                    @if (context.Ok)
+                    {
+                        <MudIcon Icon="@Icons.Material.Filled.Check" Color="Color.Success" Size="Size.Small" />
+                    }
+                    else
+                    {
+                        <MudTooltip Text="@(context.Error ?? "sin detalle")">
+                            <MudIcon Icon="@Icons.Material.Filled.ErrorOutline" Color="Color.Error" Size="Size.Small" />
+                        </MudTooltip>
+                    }
+                </MudTd>
+            </RowTemplate>
+            <ChildRowContent>
+                @if (_expandido == context)
+                {
+                    <MudTr>
+                        <td colspan="8" style="padding:12px 24px;background:var(--mud-palette-background);">
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">Respuesta</MudText>
+                            <MudText Typo="Typo.body2" Style="white-space:pre-wrap;" Class="mb-2">
+                                @if (context.Respuesta is null) { @("—") }
+                                else { @((MarkupString)AsistenteMarkdown.Render(context.Respuesta)) }
+                            </MudText>
+                            @if (_usos.TryGetValue(context.Id, out var usos) && usos.Count > 0)
+                            {
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">Herramientas del turno</MudText>
+                                <MudSimpleTable Dense="true" Class="mt-1" Style="max-width:720px;">
+                                    <tbody>
+                                    @foreach (var u in usos)
+                                    {
+                                        <tr>
+                                            <td>@u.Herramienta</td>
+                                            <td style="font-family:monospace;font-size:0.75rem;max-width:420px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">@(u.ArgsJson ?? "—")</td>
+                                            <td style="text-align:right">@u.DuracionMs ms</td>
+                                        </tr>
+                                    }
+                                    </tbody>
+                                </MudSimpleTable>
+                            }
+                        </td>
+                    </MudTr>
+                }
+            </ChildRowContent>
+        </MudTable>
+    </MudPaper>
+}
+
+@code {
+    private DateTime? _desde;
+    private DateTime? _hasta;
+    private bool _cargando = true;
+    private List<AsistenteTurno> _turnos = [];
+    private Dictionary<int, string> _usuarios = [];
+    private Dictionary<int, List<AsistenteHerramientaUso>> _usos = [];
+    private List<(string Nombre, int Cantidad)> _porHerramienta = [];
+    private AsistenteTurno? _expandido;
+
+    private readonly RenderFragment _sinDatos = @<MudText Typo="Typo.body2" Color="Color.Secondary" Class="pa-4">Sin consultas en el período.</MudText>;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var hoy = Reloj.Hoy;
+        _desde = new DateTime(hoy.Year, hoy.Month, 1);
+        _hasta = hoy.ToDateTime(TimeOnly.MinValue);
+        await Cargar();
+    }
+
+    private async Task Cargar()
+    {
+        if (_desde is null || _hasta is null) return;
+        _cargando = true;
+        try
+        {
+            // Rango en hora AR → UTC (aprox por día: alcanza para supervisión)
+            var desdeUtc = DateTime.SpecifyKind(_desde.Value.Date.AddHours(3), DateTimeKind.Utc);
+            var hastaUtc = DateTime.SpecifyKind(_hasta.Value.Date.AddDays(1).AddHours(3), DateTimeKind.Utc);
+
+            await using var db = await DbFactory.CreateDbContextAsync();
+            _turnos = await db.AsistenteTurnos.AsNoTracking()
+                .Where(t => t.CreadoUtc >= desdeUtc && t.CreadoUtc < hastaUtc)
+                .OrderByDescending(t => t.CreadoUtc)
+                .Take(500)
+                .ToListAsync();
+
+            _usuarios = await db.Usuarios.AsNoTracking()
+                .ToDictionaryAsync(u => u.Id, u => u.Nombre);
+
+            var ids = _turnos.Select(t => t.Id).ToList();
+            _usos = (await db.AsistenteHerramientasUso.AsNoTracking()
+                    .Where(u => ids.Contains(u.TurnoId))
+                    .ToListAsync())
+                .GroupBy(u => u.TurnoId)
+                .ToDictionary(g => g.Key, g => g.ToList());
+
+            _porHerramienta = _usos.Values.SelectMany(v => v)
+                .GroupBy(u => u.Herramienta)
+                .Select(g => (g.Key, g.Count()))
+                .OrderByDescending(x => x.Item2)
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _cargando = false;
+        }
+    }
+
+    private decimal ProyeccionMensual()
+    {
+        if (_desde is null || _hasta is null || _turnos.Count == 0) return 0m;
+        var dias = Math.Max(1, (_hasta.Value.Date - _desde.Value.Date).Days + 1);
+        return _turnos.Sum(t => t.CostoUsd) / dias * 30;
+    }
+
+    private string PctCacheados()
+    {
+        var entrada = _turnos.Sum(t => (long)t.TokensEntrada);
+        if (entrada == 0) return "—";
+        return $"{(double)_turnos.Sum(t => (long)t.TokensCacheados) / entrada:P1}";
+    }
+
+    private async Task Purgar()
+    {
+        var ok = await DialogService.ShowMessageBoxAsync(
+            "Purgar textos",
+            "Se borra el TEXTO (pregunta y respuesta) de las consultas de hace más de 90 días. Las filas y métricas quedan. ¿Continuar?",
+            yesText: "Purgar", cancelText: "Cancelar");
+        if (ok != true) return;
+
+        try
+        {
+            var purgados = await Registro.PurgarAsync(Reloj.Hoy.AddDays(-90));
+            Snackbar.Add($"Se purgaron {purgados} consultas.", Severity.Success);
+            await Cargar();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+    }
+}

@@ -40,6 +40,10 @@
                 </MudContainer>
             </MudMainContent>
         </MudLayout>
+
+        @* Fuera de MudMainContent a propósito: adentro, el position:fixed del widget se corre
+           al colapsar el drawer (lección Bachi). Solo para usuarios logueados. *@
+        <RRHHNovedades.Web.Components.Asistente.AsistenteFlotante />
     </Authorized>
     <NotAuthorized>
         @{ Nav.NavigateTo("/login", forceLoad: true); }

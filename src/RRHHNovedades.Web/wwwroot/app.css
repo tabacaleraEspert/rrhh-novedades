@@ -158,3 +158,134 @@ h1:focus {
         display: block;
     }
 }
+
+/* ── Asistente IA (widget flotante) ─────────────────────────────────────── */
+
+.asistente-fab {
+    position: fixed !important;
+    bottom: 24px;
+    right: 24px;
+    z-index: 1300;
+}
+
+.asistente-panel {
+    position: fixed;
+    bottom: 88px;
+    right: 24px;
+    z-index: 1300;
+    width: 420px;
+    max-width: calc(100vw - 32px);
+    height: min(640px, calc(100vh - 120px));
+    display: flex;
+    flex-direction: column;
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.asistente-mensajes {
+    flex: 1;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+.asistente-burbuja {
+    max-width: 85%;
+    width: fit-content;
+    padding: 8px 12px;
+    margin: 4px 0;
+    border-radius: 12px 12px 12px 4px;
+    background: var(--mud-palette-background);
+}
+
+.asistente-burbuja.usuario {
+    margin-left: auto;
+    border-radius: 12px 12px 4px 12px;
+    background: rgba(164, 130, 66, 0.15);
+}
+
+/* Anillo girando en el FAB mientras el asistente consulta (nunca spinner mudo) */
+.asistente-gira::after {
+    content: "";
+    position: absolute;
+    inset: -4px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    border-top-color: var(--espert-gold-light);
+    animation: asistente-giro 0.9s linear infinite;
+}
+
+@keyframes asistente-giro {
+    to { transform: rotate(360deg); }
+}
+
+.asistente-entra {
+    animation: asistente-entrada 0.25s ease-out;
+}
+
+@keyframes asistente-entrada {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Se saca el movimiento, no la información */
+@media (prefers-reduced-motion: reduce) {
+    .asistente-gira::after,
+    .asistente-entra {
+        animation: none;
+    }
+}
+
+/* Avatar del asistente (el personaje se muestra siempre; la imagen no se desmonta) */
+.asistente-avatar-boton {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    border: 2px solid var(--espert-gold);
+    background: #1A1B1C;
+    padding: 0;
+    cursor: pointer;
+    overflow: hidden;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+    transition: transform 0.15s ease;
+}
+
+.asistente-avatar-boton:hover {
+    transform: scale(1.08);
+}
+
+.asistente-avatar-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: top center;
+    display: block;
+}
+
+.asistente-avatar-mini {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 1px solid var(--espert-gold);
+    object-fit: cover;
+    object-position: top center;
+    background: #1A1B1C;
+}
+
+.asistente-avatar-saludo {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    border: 2px solid var(--espert-gold);
+    object-fit: cover;
+    object-position: top center;
+    background: #1A1B1C;
+    flex-shrink: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .asistente-avatar-boton,
+    .asistente-avatar-boton:hover {
+        transition: none;
+        transform: none;
+    }
+}

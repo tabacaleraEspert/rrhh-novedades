@@ -1,0 +1,236 @@
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.Extensions.Options
+@using RRHHNovedades.Web.Options
+@using RRHHNovedades.Web.Services.Asistente
+@implements IDisposable
+@inject AsistenteService Asistente
+@inject AsistenteEstado Estado
+@inject IOptions<AsistenteOptions> Opciones
+@inject IJSRuntime JS
+
+@* Widget flotante del asistente IA. Montado en MainLayout FUERA de MudMainContent para que
+   el position:fixed no se corra al colapsar el drawer. Sin ApiKey no se renderiza nada. *@
+
+@if (Opciones.Value.Habilitado)
+{
+    <div class="no-print">
+        @if (_abierto)
+        {
+            <MudPaper Class="asistente-panel asistente-entra" Elevation="8" @onkeydown="OnPanelKeyDown">
+                <div class="d-flex align-center px-4 py-2" style="border-bottom:1px solid var(--mud-palette-divider);">
+                    <img src="img/asistente-avatar.png" alt="" class="asistente-avatar-mini mr-2" />
+                    <MudText Typo="Typo.subtitle2" Style="font-weight:600;">Asistente de consultas</MudText>
+                    <MudSpacer />
+                    @if (Estado.MinutosRestantes() is int min && Estado.Burbujas.Count > 0)
+                    {
+                        <MudTooltip Text="La conversación se reinicia sola pasada 1 hora">
+                            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mr-2">@($"{min} min")</MudText>
+                        </MudTooltip>
+                    }
+                    @if (Estado.Burbujas.Count > 0)
+                    {
+                        <MudTooltip Text="Empezar de nuevo">
+                            <MudIconButton Icon="@Icons.Material.Filled.Refresh" Size="Size.Small" OnClick="Reiniciar" Disabled="_respondiendo" />
+                        </MudTooltip>
+                    }
+                    <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" OnClick="Cerrar" />
+                </div>
+
+                <div class="asistente-mensajes pa-3" id="asistente-mensajes">
+                    @if (Estado.Burbujas.Count == 0 && !_respondiendo)
+                    {
+                        <div class="d-flex align-center gap-3 mb-3">
+                            <img src="img/asistente-avatar.png" alt="" class="asistente-avatar-saludo" />
+                            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                Preguntame sobre asistencia, ausencias, tardanzas o licencias. Por ejemplo:
+                            </MudText>
+                        </div>
+                        <div class="d-flex flex-column gap-2 align-start">
+                            @foreach (var s in Sugerencias)
+                            {
+                                <MudChip T="string" Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small"
+                                         OnClick="@(() => EnviarSugerencia(s))">@s</MudChip>
+                            }
+                        </div>
+                    }
+                    @foreach (var b in Estado.Burbujas)
+                    {
+                        <div class="@(b.EsUsuario ? "asistente-burbuja usuario" : "asistente-burbuja")">
+                            @* El texto del asistente se renderiza con Markdown mínimo (negrita,
+                               viñetas); AsistenteMarkdown escapa TODO el HTML antes de formatear. *@
+                            <MudText Typo="Typo.body2" Style="white-space:pre-wrap;">
+                                @if (b.EsUsuario) { @b.Texto }
+                                else { @((MarkupString)AsistenteMarkdown.Render(b.Texto)) }
+                            </MudText>
+                            @if (b.Pie is not null)
+                            {
+                                <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-1">— @b.Pie</MudText>
+                            }
+                        </div>
+                    }
+                    @if (_respondiendo)
+                    {
+                        @if (_textoEnCurso.Length > 0)
+                        {
+                            <div class="asistente-burbuja">
+                                <MudText Typo="Typo.body2" Style="white-space:pre-wrap;">@((MarkupString)AsistenteMarkdown.Render(_textoEnCurso))</MudText>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="d-flex align-center gap-2 my-2">
+                                <MudProgressCircular Size="Size.Small" Indeterminate="true" Color="Color.Primary" />
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">@(_etiqueta ?? "pensando…")</MudText>
+                            </div>
+                        }
+                    }
+                    @if (_error is not null)
+                    {
+                        <MudAlert Severity="Severity.Warning" Dense="true" Class="my-2">@_error</MudAlert>
+                    }
+                </div>
+
+                <div class="d-flex align-end gap-2 pa-3" style="border-top:1px solid var(--mud-palette-divider);">
+                    <MudTextField @ref="_campo" T="string" @bind-Value="_input" Placeholder="Escribí tu consulta…"
+                                  Variant="Variant.Outlined" Margin="Margin.Dense" Lines="1" AutoGrow MaxLines="4"
+                                  Disabled="_respondiendo" OnKeyDown="OnInputKeyDown" Immediate="true" />
+                    <MudIconButton Icon="@Icons.Material.Filled.Send" Color="Color.Primary" Variant="Variant.Filled"
+                                   Size="Size.Medium" OnClick="Enviar" Disabled="@(_respondiendo || string.IsNullOrWhiteSpace(_input))" />
+                </div>
+            </MudPaper>
+        }
+
+        <MudTooltip Text="Asistente de consultas">
+            <button type="button" aria-label="Asistente de consultas"
+                    class="@("asistente-fab asistente-avatar-boton" + (_respondiendo ? " asistente-gira" : ""))"
+                    @onclick="Alternar">
+                <img src="img/asistente-avatar.png" alt="" class="asistente-avatar-img" />
+            </button>
+        </MudTooltip>
+    </div>
+}
+
+@code {
+    private static readonly string[] Sugerencias =
+    [
+        "¿Quiénes faltaron hoy?",
+        "Ausentismo de este mes por área",
+        "Tardanzas del mes",
+    ];
+
+    private bool _abierto;
+    private bool _respondiendo;
+    private string _input = string.Empty;
+    private string _textoEnCurso = string.Empty;
+    private string? _etiqueta;
+    private string? _error;
+    private MudTextField<string>? _campo;
+    private CancellationTokenSource? _cts;
+
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private async Task Alternar()
+    {
+        _abierto = !_abierto;
+        if (_abierto && _campo is not null)
+            await _campo.FocusAsync();
+    }
+
+    private void Cerrar() => _abierto = false;
+
+    private void Reiniciar()
+    {
+        Estado.Reiniciar();
+        _error = null;
+    }
+
+    private async Task OnPanelKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape") Cerrar();
+        await Task.CompletedTask;
+    }
+
+    private async Task OnInputKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !e.ShiftKey && !_respondiendo && !string.IsNullOrWhiteSpace(_input))
+            await Enviar();
+    }
+
+    private async Task EnviarSugerencia(string s)
+    {
+        _input = s;
+        await Enviar();
+    }
+
+    private async Task Enviar()
+    {
+        var pregunta = _input.Trim();
+        if (pregunta.Length == 0 || _respondiendo) return;
+
+        // Identidad del server-side auth state, jamás de un input del cliente.
+        var auth = AuthState is null ? null : await AuthState;
+        var user = auth?.User;
+        var idClaim = user?.FindFirst("UserId")?.Value;
+        if (user?.Identity?.IsAuthenticated != true || !int.TryParse(idClaim, out var usuarioId))
+        {
+            _error = "Se venció tu sesión. Recargá la página.";
+            return;
+        }
+
+        _input = string.Empty;
+        _error = null;
+        _respondiendo = true;
+        _textoEnCurso = string.Empty;
+        _etiqueta = null;
+        _cts = new CancellationTokenSource();
+
+        try
+        {
+            await foreach (var evento in Asistente.PreguntarAsync(pregunta, usuarioId, user.Identity.Name ?? "—", _cts.Token))
+            {
+                switch (evento)
+                {
+                    case EventoTexto t:
+                        _textoEnCurso += t.Delta;
+                        break;
+                    case EventoHerramienta h:
+                        _etiqueta = h.Etiqueta;
+                        break;
+                    case EventoError err:
+                        _error = err.Mensaje;
+                        break;
+                    case EventoFin:
+                        _textoEnCurso = string.Empty; // ya quedó como burbuja en Estado
+                        break;
+                    default:
+                        break; // evento nuevo: se ignora sin romper
+                }
+                await InvokeAsync(StateHasChanged);
+                await Scroll();
+            }
+        }
+        catch (OperationCanceledException) { /* circuito cerrado o reset */ }
+        finally
+        {
+            _respondiendo = false;
+            _etiqueta = null;
+            _textoEnCurso = string.Empty;
+            await InvokeAsync(StateHasChanged);
+            await Scroll();
+            if (_abierto && _campo is not null)
+                await _campo.FocusAsync();
+        }
+    }
+
+    private async Task Scroll()
+    {
+        try { await JS.InvokeVoidAsync("asistenteScroll", "asistente-mensajes"); }
+        catch (JSException) { /* sin JS no hay autoscroll, nada más */ }
+    }
+
+    public void Dispose()
+    {
+        _cts?.Cancel();
+        _cts?.Dispose();
+    }
+}

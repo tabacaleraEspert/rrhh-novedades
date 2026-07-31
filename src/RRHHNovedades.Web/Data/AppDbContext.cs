@@ -13,6 +13,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<ConfiguracionParte> ConfiguracionParte => Set<ConfiguracionParte>();
     public DbSet<SsoTicketUsado> SsoTicketsUsados => Set<SsoTicketUsado>();
     public DbSet<LicenciaManual> LicenciasManuales => Set<LicenciaManual>();
+    public DbSet<AsistenteTurno> AsistenteTurnos => Set<AsistenteTurno>();
+    public DbSet<AsistenteHerramientaUso> AsistenteHerramientasUso => Set<AsistenteHerramientaUso>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -40,6 +42,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         modelBuilder.Entity<NovedadDiaria>(e =>
         {
             e.HasIndex(x => new { x.EmpleadoId, x.Fecha }).IsUnique(); // idempotencia
+            e.HasIndex(x => x.Fecha); // consultas por rango del asistente (antes: seq scan)
             e.Property(x => x.MotivoNovedad).HasMaxLength(200);
             e.HasOne(x => x.Empleado).WithMany().HasForeignKey(x => x.EmpleadoId);
         });
@@ -70,6 +73,23 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.Property(x => x.Motivo).HasMaxLength(100);
             e.Property(x => x.CreadaPor).HasMaxLength(120);
             e.HasOne(x => x.Empleado).WithMany().HasForeignKey(x => x.EmpleadoId);
+        });
+
+        modelBuilder.Entity<AsistenteTurno>(e =>
+        {
+            e.HasIndex(x => x.UsuarioId);
+            e.HasIndex(x => x.CreadoUtc); // el rate limit consulta por ventana de tiempo
+            e.Property(x => x.Modelo).HasMaxLength(60);
+            e.Property(x => x.Error).HasMaxLength(500);
+            e.HasOne(x => x.Usuario).WithMany().HasForeignKey(x => x.UsuarioId);
+        });
+
+        modelBuilder.Entity<AsistenteHerramientaUso>(e =>
+        {
+            e.HasIndex(x => x.TurnoId);
+            e.Property(x => x.Herramienta).HasMaxLength(60);
+            e.Property(x => x.ArgsJson).HasMaxLength(2000);
+            e.HasOne(x => x.Turno).WithMany().HasForeignKey(x => x.TurnoId).OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<SsoTicketUsado>(e =>

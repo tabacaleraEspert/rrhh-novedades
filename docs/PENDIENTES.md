@@ -35,6 +35,26 @@ Plan de ejecución por etapas. Base funcional: `docs/Novedades_RRHH.pdf` (spec v
 > - Datos: junio tiene pocas justificadas la 1ª quincena (¿permisos no cargados en Humand en esa
 >   época?) — **validar con RRHH** antes de usar junio para decisiones.
 > - 104 tests verdes · smoke verde · CI/CD verdes.
+>
+> **Novedad (30-jul-2026): Asistente IA de consultas** ✅ (patrón Bachi de MiPileta, adaptado).
+> - **Widget flotante** (FAB dorado en todas las páginas, usuarios logueados): chat en lenguaje
+>   natural sobre los datos del tablero — "¿quiénes faltaron hoy?", "¿qué pasó con X?", "tardanzas
+>   del mes", "licencias activas". 9 herramientas tipadas sobre los servicios existentes (los
+>   números coinciden con las pantallas) + `get_cobertura_datos` anti "mentir por omisión".
+> - Motor: API de OpenAI (**gpt-5.2**, mismo modelo/proveedor que Bachi), SDK oficial, loop de
+>   tool-use con cierre forzado (`tool_choice none`), prompt estable cacheado (`Conocimiento/*.md`)
+>   + volátil, compactación columnar de resultados, timeout escalonado 90 s.
+> - **Auditoría**: tablas `AsistenteTurnos` (pregunta/respuesta/tokens/costo por turno) y
+>   `AsistenteHerramientasUso` (FK); rate limit 20/5min por usuario contando filas (falla cerrada);
+>   panel **/asistente-uso** (solo Admin): costo del período + proyección, % cacheados, detalle por
+>   consulta, purga de textos (+90 días, UPDATE a NULL — nunca DELETE).
+> - ⚠️ Para activarlo: (1) correr `infra/ddl-2026-07-30-asistente.sh` en prod ANTES del deploy;
+>   (2) cargar `Asistente--ApiKey` en Key Vault (dev: `appsettings.secrets.local.json`) y reiniciar
+>   la revisión. Sin key el asistente no aparece y el resto sigue normal.
+> - ⚠️ Gobernanza pendiente: definir por escrito retención/no-entrenamiento de la cuenta OpenAI
+>   (nombres y ausencias de empleados viajan al proveedor) y decidir si es cuenta propia de Espert.
+> - 139 tests verdes (35 nuevos: consultas, tools, compactador, loop con proveedor guionado,
+>   registro/purga) · health check `/ready` verifica que los .md llegaron al contenedor.
 
 ---
 

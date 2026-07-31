@@ -181,6 +181,27 @@
 
     <MudExpansionPanel>
         <TitleContent>
+            <div class="d-flex align-center gap-2"><MudIcon Icon="@Icons.Material.Filled.Forum" Color="Color.Primary" /><MudText Style="font-weight:600;">El asistente de consultas</MudText></div>
+        </TitleContent>
+        <ChildContent>
+            <MudText Typo="Typo.body2" Class="mb-2">
+                El botón dorado de abajo a la derecha abre un <b>chat para consultar los datos del tablero en tu idioma</b>:
+                "¿quiénes faltaron hoy?", "¿qué pasó con Pérez la semana pasada?", "tardanzas de julio", "licencias activas".
+                Responde con los mismos números que muestran las pantallas.
+            </MudText>
+            <MudList T="string" Dense="true">
+                <MudListItem T="string" Icon="@Icons.Material.Filled.Timer">Puede tardar <b>unos segundos</b>: primero consulta los datos y después redacta. Abajo va mostrando qué está buscando.</MudListItem>
+                <MudListItem T="string" Icon="@Icons.Material.Filled.EventBusy">Solo sabe de lo que está <b>sincronizado</b>: si un período viejo no se trajo de Humand, te lo va a aclarar en vez de responder "no hubo nada".</MudListItem>
+                <MudListItem T="string" Icon="@Icons.Material.Filled.Block">No conoce sueldos, antigüedad, horas extra ni saldo de vacaciones — esos datos no están en este sistema.</MudListItem>
+                <MudListItem T="string" Icon="@Icons.Material.Filled.Refresh">La conversación se <b>reinicia sola pasada 1 hora</b> (o con el botón ⟳ del chat). Hay un límite de consultas seguidas para cuidar los costos.</MudListItem>
+                <MudListItem T="string" Icon="@Icons.Material.Filled.Visibility">Las consultas <b>quedan registradas</b> (quién preguntó qué y qué datos se consultaron); las puede revisar el Admin en "Uso del asistente".</MudListItem>
+                <MudListItem T="string" Icon="@Icons.Material.Filled.FactCheck">Ante un dato importante (una liquidación, un descuento), <b>verificalo en la pantalla del reporte</b> — el asistente es una ayuda, no reemplaza la planilla.</MudListItem>
+            </MudList>
+        </ChildContent>
+    </MudExpansionPanel>
+
+    <MudExpansionPanel>
+        <TitleContent>
             <div class="d-flex align-center gap-2"><MudIcon Icon="@Icons.Material.Filled.Quiz" Color="Color.Primary" /><MudText Style="font-weight:600;">Preguntas frecuentes</MudText></div>
         </TitleContent>
         <ChildContent>
