@@ -75,19 +75,16 @@ WhatsApp a los `DestinatarioParte` activos. Disparo manual: página **Bot de nov
 - Mientras no haya esquema definitivo se usa `EnsureCreatedAsync` en `Program.cs`.
 - Al cerrar los modelos, reemplazar por `MigrateAsync()` + migraciones EF.
 
-## Inicialización de BD
-- Mientras no haya esquema definitivo se usa `EnsureCreatedAsync` en `Program.cs`.
-- Al cerrar los modelos, reemplazar por `MigrateAsync()` + migraciones EF.
-
 ## Autenticación
 - Cookie-based, 12h expiry, HttpOnly
-- Roles: Admin, Operador
+- Roles: Admin, RRHH (ambos con acceso completo; RRHH administra el día a día, Admin = Sistemas/IT)
 - Endpoints: POST /api/auth/login, GET /api/auth/logout
 - SSO desde el Command Center: `GET /sso#ticket=<JWT>` (landing estática) → `POST /api/auth/sso`.
   Ticket HS256 de un solo uso (claims dni/aud/iat/exp/jti; jti se quema en `SsoTicketsUsados`),
   secret en `Sso:SharedSecret` (Key Vault `Sso--SharedSecret`), lookup por `Usuario.Dni`.
   Núcleo testeable en `Services/SsoTicketService.cs`; detalles de deploy en `docs/DEPLOY-AZURE.md` §SSO.
-- Seed: desarrollador1@tabacaleraespert.com (Admin), pass `espert` — cambiar en prod
+- Seed (idempotente por email, en `SeedData.cs`): desarrollador1@tabacaleraespert.com (Admin) y
+  rrhh@tabacaleraespert.com (RRHH), ambos con PIN inicial `0000` — cambiar en prod
 
 ## Integraciones
 - **Humand**: `IHumandService` — `/users` (empleados) y `/time-tracking/day-summaries` (jornada con
@@ -119,6 +116,18 @@ bot, etc.), actualizando también la constante `UltimaActualizacion`. Secciones 
 sistema, clasificación de estados, uso del dashboard, bot de WhatsApp, cuándo se actualizan los
 datos, configuración y preguntas frecuentes. Escribir en lenguaje simple, sin jerga técnica.
 
+## Flujo de trabajo — SDD (Spec-Driven Development)
+Toda feature se especifica **antes** de codear. Cuatro pasos, un archivo por paso en
+`specs/NNNN-<slug>/`:
+1. `/specify <feature>` → `spec.md` (qué y por qué, sin el cómo técnico)
+2. `/plan` → `plan.md` (cómo: archivos, datos, tests, impacto en Ayuda)
+3. `/tasks` → `tasks.md` (checklist verificable)
+4. `/implement` → ejecuta las tareas
+
+Los principios no negociables están en `.specify/constitution.md` (destilados de este archivo:
+tests obligatorios, manual de usuario al día, TZ Argentina, `IDbContextFactory`, sin secretos, no
+commitear sin aprobación). Slash commands en `.claude/commands/`. Detalle del flujo: `specs/README.md`.
+
 ## Convenciones de Código (heredadas de ChatbotCobros)
 - Usar `IDbContextFactory<AppDbContext>` (NUNCA inyectar DbContext directo)
 - Render mode: `@rendermode InteractiveServer` en páginas interactivas
@@ -145,6 +154,7 @@ datos, configuración y preguntas frecuentes. Escribir en lenguaje simple, sin j
 
 ## Documentación relevante
 - `docs/PENDIENTES.md` — plan vivo por etapas y estado.
+- `docs/DEPLOY.md` — guía paso a paso de despliegue a producción (Azure).
 - `docs/Novedades_RRHH.pdf` — spec funcional v1.0.
 - `docs/humand/ENDPOINTS-RELEVANTES.md` — API Humand para este proyecto.
 - `docs/TEMPLATE-PARTE.md` — diseño del template de WhatsApp del parte.

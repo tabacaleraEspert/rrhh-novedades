@@ -10,7 +10,7 @@ public static class SeedData
         // Usuarios iniciales (idempotente por email: agrega los que falten sin pisar los existentes).
         // El login es por PIN; el PIN inicial es 0000. Cambiarlo en producción desde Configuración.
         await SeedUsuarioAsync(db, "Administrador", "desarrollador1@tabacaleraespert.com", "0000", Roles.Admin);
-        // Equipo de RRHH: ve el dashboard y las consultas, sin acceso a Configuración.
+        // Equipo de RRHH que administra el sistema: acceso completo, igual que Admin.
         await SeedUsuarioAsync(db, "RRHH", "rrhh@tabacaleraespert.com", "0000", Roles.RRHH);
 
         if (!db.Destinatarios.Any())

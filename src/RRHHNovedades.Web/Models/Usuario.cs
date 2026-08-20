@@ -14,8 +14,8 @@ public class Usuario
 
 public static class Roles
 {
-    /// <summary>Acceso total, incluida la Configuración y los endpoints operativos.</summary>
+    /// <summary>Acceso total (cuenta de Sistemas/IT): dashboard, bot, Configuración y endpoints operativos.</summary>
     public const string Admin = "Admin";
-    /// <summary>Equipo de RRHH: dashboard, empleados y consultas. No accede a Configuración.</summary>
+    /// <summary>Equipo de RRHH que administra el sistema: mismo acceso completo que Admin (incluida Configuración).</summary>
     public const string RRHH = "RRHH";
 }

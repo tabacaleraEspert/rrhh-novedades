@@ -10,6 +10,9 @@ obj/
 ## VS Code
 .vscode/
 
+## Claude Code — runtime (los slash commands en .claude/commands/ SÍ se commitean)
+.claude/scheduled_tasks.lock
+
 ## Rider
 .idea/
 
@@ -32,6 +35,9 @@ x86/
 ## Secrets (appsettings.json se commitea SIN keys — los secrets van en App Settings de Azure)
 **/appsettings.Development.json
 **/appsettings.*.local.json
+.env
+.env.*
+*.env
 
 ## Database
 *.mdf
