@@ -70,6 +70,15 @@ public class ParteScheduler(
             logger.LogInformation("Auto-sync de las {Hora} del {Hoy}", horaTxt, hoy);
             await EjecutarSyncAsync(hoy, ct);
         }
+
+        // Re-sync retroactivo diario: los certificados médicos y licencias suelen cargarse/aprobarse
+        // en Humand DÍAS DESPUÉS de la falta; sin re-mirar el pasado, esos días quedan congelados
+        // como injustificados (caso real: "Lic. por art" del 3-16 ago cargada en tandas retroactivas).
+        if (opt.ResyncRetroDias > 0 && Vence(opt.HoraResyncRetro, horaActual, hoy, "resync-retro"))
+        {
+            logger.LogInformation("Re-sync retroactivo de {Dias} días", opt.ResyncRetroDias);
+            await EjecutarResyncRetroAsync(hoy, opt.ResyncRetroDias, ct);
+        }
     }
 
     private async Task<(string manana, string tarde, string noche)> LeerHorariosParteAsync(AsistenciaOptions opt, CancellationToken ct)
@@ -123,5 +132,23 @@ public class ParteScheduler(
 
         await ingesta.SincronizarEmpleadosAsync(ct);
         await ingesta.SincronizarDiaAsync(fecha, ct);
+    }
+
+    private async Task EjecutarResyncRetroAsync(DateOnly hoy, int dias, CancellationToken ct)
+    {
+        await using var scope = scopeFactory.CreateAsyncScope();
+        var ingesta = scope.ServiceProvider.GetRequiredService<IIngestaService>();
+
+        await ingesta.SincronizarEmpleadosAsync(ct);
+        foreach (var f in FechasResyncRetro(hoy, dias))
+            await ingesta.SincronizarDiaAsync(f, ct);
+    }
+
+    // De ayer hacia atrás (hoy ya lo cubren los partes y auto-syncs).
+    // internal para testear (InternalsVisibleTo RRHHNovedades.Tests).
+    internal static IEnumerable<DateOnly> FechasResyncRetro(DateOnly hoy, int dias)
+    {
+        for (int i = 1; i <= dias; i++)
+            yield return hoy.AddDays(-i);
     }
 }

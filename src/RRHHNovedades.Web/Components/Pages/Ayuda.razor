@@ -160,6 +160,8 @@
             <MudList T="string" Dense="true">
                 <MudListItem T="string" Icon="@Icons.Material.Filled.Autorenew">Automáticamente <b>antes de cada parte</b> (06:00, 07:00 y 14:00).</MudListItem>
                 <MudListItem T="string" Icon="@Icons.Material.Filled.Autorenew">Automáticamente en los <b>horarios de auto-sync</b> (10:30 y 16:30 por defecto, configurables).</MudListItem>
+                <MudListItem T="string" Icon="@Icons.Material.Filled.History">Todas las madrugadas (05:00) se <b>revisan los últimos 30 días</b>: si en Humand se cargó algo con fecha retroactiva (un certificado médico presentado días después, una licencia, o un franco/día de descanso asignado o corregido tarde), esos días se corrigen solos — la falta injustificada pasa a justificada o a franco, según corresponda.</MudListItem>
+                <MudListItem T="string" Icon="@Icons.Material.Filled.TipsAndUpdates">Si ves una falta injustificada que ya fue corregida en Humand y no querés esperar a la madrugada: en <b>Ausentismo</b>, elegí el rango y apretá <b>"Sincronizar período"</b> — re-trae esos días al instante. Sirve también para períodos más viejos que 30 días.</MudListItem>
                 <MudListItem T="string" Icon="@Icons.Material.Filled.TouchApp">A demanda, con el botón <b>⟳ del Dashboard</b> o "Sincronizar hoy" en Bot de novedades.</MudListItem>
                 <MudListItem T="string" Icon="@Icons.Material.Filled.Monitor">La pantalla del Dashboard además se <b>refresca sola cada 5 minutos</b>.</MudListItem>
             </MudList>
@@ -229,5 +231,5 @@
 
 @code {
     // Actualizar esta fecha cada vez que se modifique el manual (ver CLAUDE.md → "Manual de uso").
-    private const string UltimaActualizacion = "20/08/2026";
+    private const string UltimaActualizacion = "26/08/2026";
 }

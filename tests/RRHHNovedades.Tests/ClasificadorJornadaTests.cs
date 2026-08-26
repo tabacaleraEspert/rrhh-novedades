@@ -45,6 +45,20 @@ public class ClasificadorJornadaTests
     }
 
     [Fact]
+    public void Caso_real_licencia_retroactiva_al_resincronizar_queda_Justificado()
+    {
+        // Caso Dias 03-ago-2026 (verificado en prod): faltó y quedó AusenteInjustificado; días
+        // después RRHH cargó en Humand la "Lic. por art" retroactiva. Al re-sincronizar ese día,
+        // Humand ya devuelve isWorkday=true, hasSchedule=true, incidences=[] y el permiso embebido
+        // ⇒ debe reclasificar a Justificado (lo aprovecha el re-sync retroactivo del scheduler).
+        var (estado, motivo, _) = IngestaService.Clasificar(
+            Jornada(permisos: ["Lic. por art"]),
+            ahora: new DateTimeOffset(2026, 8, 26, 5, 0, 0, TimeSpan.FromHours(-3)));
+        Assert.Equal(EstadoJornada.AusenteJustificado, estado);
+        Assert.Equal("Lic. por art", motivo);
+    }
+
+    [Fact]
     public void Caso_real_vacaciones_Humand_quita_el_horario_y_NO_marca_ABSENT()
     {
         // Caso Miño (verificado en prod): con vacaciones aprobadas, Humand devuelve

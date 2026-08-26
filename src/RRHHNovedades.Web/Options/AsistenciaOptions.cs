@@ -33,4 +33,16 @@ public class AsistenciaOptions
     /// que hoy la empresa no tiene cargados. Mantener por año en appsettings.
     /// </summary>
     public List<string> Feriados { get; set; } = [];
+
+    /// <summary>Hora (HH:mm) del re-sync retroactivo diario. Ver <see cref="ResyncRetroDias"/>.</summary>
+    public string HoraResyncRetro { get; set; } = "05:00";
+
+    /// <summary>
+    /// Cuántos días hacia atrás re-sincroniza el re-sync retroactivo diario (0 = deshabilitado).
+    /// Los certificados médicos, licencias y francos suelen cargarse/corregirse en Humand días
+    /// después de la falta (a veces recién al revisar la planilla para la liquidación mensual);
+    /// sin re-mirar el pasado, esos días quedan congelados como injustificados. 30 días cubre
+    /// el ciclo completo de liquidación (26→25).
+    /// </summary>
+    public int ResyncRetroDias { get; set; } = 30;
 }
