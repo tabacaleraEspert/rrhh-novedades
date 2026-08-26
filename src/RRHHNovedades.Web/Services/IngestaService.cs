@@ -101,10 +101,13 @@ public class IngestaService(
             .ToListAsync(ct)).ToHashSet();
 
         // Licencias manuales de RRHH vigentes en la fecha: justifican lo que Humand marque
-        // injustificado (o pendiente futuro) con el motivo cargado a mano.
-        var manuales = await db.LicenciasManuales
-            .Where(l => l.Desde <= fecha && (l.Hasta == null || l.Hasta >= fecha))
-            .ToDictionaryAsync(l => l.EmpleadoId, l => l.Motivo, ct);
+        // injustificado (o pendiente futuro) con el motivo cargado a mano. Puede haber más de
+        // una vigente para el mismo empleado (rangos superpuestos): gana la de Desde más reciente.
+        var manuales = (await db.LicenciasManuales
+                .Where(l => l.Desde <= fecha && (l.Hasta == null || l.Hasta >= fecha))
+                .ToListAsync(ct))
+            .GroupBy(l => l.EmpleadoId)
+            .ToDictionary(g => g.Key, g => g.OrderByDescending(l => l.Desde).ThenByDescending(l => l.Id).First().Motivo);
 
         int n = 0;
 
