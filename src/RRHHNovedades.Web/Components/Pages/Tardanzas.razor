@@ -1,0 +1,259 @@
+@page "/tardanzas"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject ITardanzasService TardanzasSrv
+@inject IReloj Reloj
+@inject IJSRuntime JS
+@inject ISnackbar Snackbar
+@inject Microsoft.Extensions.Options.IOptions<RRHHNovedades.Web.Options.FeaturesOptions> Features
+@using RRHHNovedades.Web.Services
+
+<PageTitle>Tardanzas - RRHH</PageTitle>
+
+@if (!Features.Value.Tardanzas)
+{
+    <MudAlert Severity="Severity.Info" Class="mt-4">
+        La sección Tardanzas está deshabilitada (Features:Tardanzas). Las secciones históricas del tablero no cambian.
+    </MudAlert>
+    return;
+}
+
+<div class="d-flex align-center justify-space-between mb-1 flex-wrap gap-2">
+    <div>
+        <div class="d-flex align-center gap-2">
+            <MudText Typo="Typo.h5" Style="font-weight:600;">Tardanzas</MudText>
+            <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Filled">Nuevo</MudChip>
+        </div>
+        <MudText Typo="Typo.body2" Color="Color.Secondary">
+            Llegadas tarde según Humand (incidencia <b>LATE</b> del fichaje). La racha cuenta jornadas
+            trabajadas <b>consecutivas</b> llegando tarde: un franco o feriado en el medio no la corta,
+            un día en hora sí. Clic en una fila para ver el detalle día por día.
+        </MudText>
+    </div>
+    <div class="d-flex align-center gap-2 flex-wrap">
+        <MudDatePicker Label="Desde" Date="_desdeDt" DateChanged="OnDesdeChanged" Margin="Margin.Dense"
+                       DateFormat="dd/MM/yyyy" Style="min-width:140px;" />
+        <MudDatePicker Label="Hasta" Date="_hastaDt" DateChanged="OnHastaChanged" Margin="Margin.Dense"
+                       DateFormat="dd/MM/yyyy" Style="min-width:140px;" />
+        <MudSelect T="string" Label="Área" Value="_area" ValueChanged="OnAreaChanged" Clearable="true"
+                   Style="min-width:180px;" Margin="Margin.Dense" Dense="true">
+            @foreach (var a in _areas)
+            {
+                <MudSelectItem T="string" Value="@a">@a</MudSelectItem>
+            }
+        </MudSelect>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Filled.Download"
+                   OnClick="ExportarExcel" Disabled="@(_filtradas.Count == 0 || _loading)">Excel</MudButton>
+    </div>
+</div>
+
+<MudGrid Class="mt-1" Spacing="2">
+    <MudItem xs="6" sm="3">
+        <MudPaper Class="pa-4" Elevation="1">
+            <div class="d-flex align-center justify-space-between">
+                <MudText Typo="Typo.overline" Color="Color.Secondary">Tardanzas</MudText>
+                <MudIcon Icon="@Icons.Material.Filled.Timer" Color="Color.Warning" Size="Size.Small" />
+            </div>
+            <MudText Typo="Typo.h4" Style="font-weight:600;">@_filtradas.Sum(t => t.Cantidad)</MudText>
+            <MudText Typo="Typo.caption" Color="Color.Secondary">@PctSobreFichajes()</MudText>
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="6" sm="3">
+        <MudPaper Class="pa-4" Elevation="1">
+            <div class="d-flex align-center justify-space-between">
+                <MudText Typo="Typo.overline" Color="Color.Secondary">Minutos perdidos</MudText>
+                <MudIcon Icon="@Icons.Material.Filled.HourglassBottom" Color="Color.Warning" Size="Size.Small" />
+            </div>
+            <MudText Typo="Typo.h4" Style="font-weight:600;">@_filtradas.Sum(t => t.MinutosTotal)</MudText>
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="6" sm="3">
+        <MudPaper Class="pa-4" Elevation="1">
+            <div class="d-flex align-center justify-space-between">
+                <MudText Typo="Typo.overline" Color="Color.Secondary">Empleados</MudText>
+                <MudIcon Icon="@Icons.Material.Filled.People" Color="Color.Primary" Size="Size.Small" />
+            </div>
+            <MudText Typo="Typo.h4" Style="font-weight:600;">@_filtradas.Count</MudText>
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="6" sm="3">
+        <MudPaper Class="pa-4" Elevation="1">
+            <div class="d-flex align-center justify-space-between">
+                <MudText Typo="Typo.overline" Color="Color.Secondary">Reincidentes (racha ≥ 3)</MudText>
+                <MudIcon Icon="@Icons.Material.Filled.PriorityHigh" Color="Color.Error" Size="Size.Small" />
+            </div>
+            <MudText Typo="Typo.h4" Style="font-weight:600;">@_filtradas.Count(t => t.RachaMaxima >= 3)</MudText>
+        </MudPaper>
+    </MudItem>
+</MudGrid>
+
+<MudPaper Class="mt-3" Elevation="1">
+    <MudTable T="TardanzaEmpleado" Items="_filtradas" Dense="true" Hover="true" Loading="_loading" Breakpoint="Breakpoint.Sm"
+              OnRowClick="@(args => AbrirDetalle(args.Item))" RowClass="cursor-pointer">
+        <ToolBarContent>
+            <MudTextField @bind-Value="_buscar" Placeholder="Buscar por nombre, legajo o área" Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Small" Class="mt-0" Immediate="true" />
+        </ToolBarContent>
+        <NoRecordsContent>
+            <MudText>Sin tardanzas en el rango elegido@(_area is null ? "" : $" para {_area}").</MudText>
+        </NoRecordsContent>
+        <HeaderContent>
+            <MudTh>Empleado</MudTh>
+            <MudTh>Área</MudTh>
+            <MudTh Style="text-align:right;">Tardanzas</MudTh>
+            <MudTh Style="text-align:right;">Min. total</MudTh>
+            <MudTh Style="text-align:right;">Min. promedio</MudTh>
+            <MudTh Style="text-align:right;">Racha máx.</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Empleado">@context.ApellidoNombre</MudTd>
+            <MudTd DataLabel="Área">@(context.Area ?? "—")</MudTd>
+            <MudTd DataLabel="Tardanzas" Style="text-align:right;">@context.Cantidad</MudTd>
+            <MudTd DataLabel="Min. total" Style="text-align:right;font-weight:600;">@context.MinutosTotal</MudTd>
+            <MudTd DataLabel="Min. promedio" Style="text-align:right;">@context.MinutosPromedio.ToString("0.#")</MudTd>
+            <MudTd DataLabel="Racha máx." Style="text-align:right;">
+                @if (context.RachaMaxima >= 3)
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Error" Variant="Variant.Text">@context.RachaMaxima días</MudChip>
+                }
+                else
+                {
+                    @context.RachaMaxima
+                }
+            </MudTd>
+        </RowTemplate>
+    </MudTable>
+</MudPaper>
+
+<MudDialog @bind-Visible="_detVisible" Options="_dlgOpts">
+    <TitleContent>
+        <MudText Typo="Typo.h6">@_detNombre — tardanzas del rango</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudSimpleTable Dense="true">
+            <thead>
+                <tr><th style="text-align:left;">Fecha</th><th>Entrada</th><th style="text-align:right;">Minutos tarde</th></tr>
+            </thead>
+            <tbody>
+                @foreach (var d in _detFilas)
+                {
+                    <tr>
+                        <td>@d.Fecha.ToString("ddd dd/MM")</td>
+                        <td style="text-align:center;">@(d.HoraEntrada?.ToString("HH:mm") ?? "—")</td>
+                        <td style="text-align:right;font-weight:600;">@d.Minutos</td>
+                    </tr>
+                }
+            </tbody>
+            <tfoot>
+                <tr style="border-top:2px solid var(--mud-palette-lines-default);">
+                    <td style="font-weight:600;">Total (@_detFilas.Count tardanzas)</td>
+                    <td></td>
+                    <td style="text-align:right;font-weight:600;">@_detFilas.Sum(x => x.Minutos)</td>
+                </tr>
+            </tfoot>
+        </MudSimpleTable>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => _detVisible = false)">Cerrar</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private DateOnly _desde;
+    private DateOnly _hasta;
+    private DateTime? _desdeDt;
+    private DateTime? _hastaDt;
+    private string? _area;
+    private List<string> _areas = [];
+    private bool _loading = true;
+    private TardanzasReporte? _reporte;
+    private string _buscar = string.Empty;
+
+    private List<TardanzaEmpleado> _filtradas =>
+        (_reporte?.PorEmpleado ?? [])
+        .Where(t => (_area is null || t.Area == _area) && PasaBusqueda(t))
+        .ToList();
+
+    private bool PasaBusqueda(TardanzaEmpleado t)
+    {
+        if (string.IsNullOrWhiteSpace(_buscar)) return true;
+        var q = _buscar.Trim().ToLowerInvariant();
+        return t.ApellidoNombre.ToLowerInvariant().Contains(q)
+            || (t.Area ?? "").ToLowerInvariant().Contains(q)
+            || (t.Legajo ?? "").ToLowerInvariant().Contains(q);
+    }
+
+    private bool _detVisible;
+    private string _detNombre = string.Empty;
+    private IReadOnlyList<TardanzaDetalle> _detFilas = [];
+    private readonly DialogOptions _dlgOpts = new() { MaxWidth = MaxWidth.Small, FullWidth = true, CloseOnEscapeKey = true };
+
+    protected override async Task OnInitializedAsync()
+    {
+        var hoy = Reloj.Hoy;
+        _desde = hoy.AddDays(-29); // últimos 30 días
+        _hasta = hoy;
+        _desdeDt = _desde.ToDateTime(TimeOnly.MinValue);
+        _hastaDt = _hasta.ToDateTime(TimeOnly.MinValue);
+        await Cargar();
+    }
+
+    private async Task OnDesdeChanged(DateTime? d)
+    {
+        if (d is null) return;
+        _desdeDt = d; _desde = DateOnly.FromDateTime(d.Value);
+        await Cargar();
+    }
+
+    private async Task OnHastaChanged(DateTime? d)
+    {
+        if (d is null) return;
+        _hastaDt = d; _hasta = DateOnly.FromDateTime(d.Value);
+        await Cargar();
+    }
+
+    private void OnAreaChanged(string? a) => _area = string.IsNullOrEmpty(a) ? null : a;
+
+    private async Task Cargar()
+    {
+        if (_hasta < _desde) return;
+        _loading = true;
+        try
+        {
+            _reporte = await TardanzasSrv.ReporteAsync(_desde, _hasta);
+            _areas = _reporte.PorEmpleado.Select(t => t.Area).Where(a => !string.IsNullOrWhiteSpace(a))
+                .Select(a => a!).Distinct().OrderBy(a => a).ToList();
+            if (_area is not null && !_areas.Contains(_area)) _area = null;
+        }
+        catch (Exception ex)
+        {
+            _reporte = null;
+            Snackbar.Add($"Error al cargar el reporte: {ex.Message}", Severity.Error);
+        }
+        finally { _loading = false; }
+    }
+
+    private string PctSobreFichajes()
+    {
+        var fichajes = _reporte?.JornadasConFichaje ?? 0;
+        if (fichajes == 0) return "sin fichajes en el rango";
+        var pct = (double)_filtradas.Sum(t => t.Cantidad) / fichajes;
+        return $"{pct:P1} de las jornadas con fichaje";
+    }
+
+    private void AbrirDetalle(TardanzaEmpleado? t)
+    {
+        if (t is null) return;
+        _detFilas = t.Detalle;
+        _detNombre = t.ApellidoNombre;
+        _detVisible = true;
+    }
+
+    private async Task ExportarExcel()
+    {
+        var bytes = await TardanzasSrv.ExcelAsync(_desde, _hasta, _area);
+        await JS.InvokeVoidAsync("downloadFile", $"tardanzas_{_desde:yyyyMMdd}_{_hasta:yyyyMMdd}.xlsx",
+            Convert.ToBase64String(bytes),
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    }
+}

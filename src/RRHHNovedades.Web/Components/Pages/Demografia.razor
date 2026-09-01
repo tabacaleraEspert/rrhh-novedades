@@ -1,0 +1,230 @@
+@page "/demografia"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject IDemografiaService DemografiaSrv
+@inject ISnackbar Snackbar
+@inject Microsoft.Extensions.Options.IOptions<RRHHNovedades.Web.Options.FeaturesOptions> Features
+@using RRHHNovedades.Web.Services
+
+<PageTitle>Demografía - RRHH</PageTitle>
+
+@if (!Features.Value.Demografia)
+{
+    <MudAlert Severity="Severity.Info" Class="mt-4">
+        La sección Demografía está deshabilitada (Features:Demografia). Las secciones históricas del tablero no cambian.
+    </MudAlert>
+    return;
+}
+
+<div class="d-flex align-center justify-space-between mb-1 flex-wrap gap-2">
+    <div>
+        <div class="d-flex align-center gap-2">
+            <MudText Typo="Typo.h5" Style="font-weight:600;">Demografía</MudText>
+            <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Filled">Nuevo</MudChip>
+        </div>
+        <MudText Typo="Typo.body2" Color="Color.Secondary">
+            Foto de la dotación <b>activa</b>, en vivo desde Humand (cache 10 min): sectores, turnos,
+            antigüedad, edades, cumpleaños y esquema de jefes. Los bloques sin dato cargado en Humand
+            no se muestran — acá no se inventa nada.
+        </MudText>
+    </div>
+    <MudButton Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.Refresh"
+               OnClick="Cargar" Disabled="_loading">Actualizar</MudButton>
+</div>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Class="mt-4" />
+}
+else if (_r is not null)
+{
+    <MudGrid Class="mt-1" Spacing="2">
+        <MudItem xs="6" sm="3">
+            <MudPaper Class="pa-4" Elevation="1">
+                <div class="d-flex align-center justify-space-between">
+                    <MudText Typo="Typo.overline" Color="Color.Secondary">Dotación activa</MudText>
+                    <MudIcon Icon="@Icons.Material.Filled.Diversity3" Color="Color.Primary" Size="Size.Small" />
+                </div>
+                <MudText Typo="Typo.h4" Style="font-weight:600;">@_r.Activos</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="6" sm="3">
+            <MudPaper Class="pa-4" Elevation="1">
+                <div class="d-flex align-center justify-space-between">
+                    <MudText Typo="Typo.overline" Color="Color.Secondary">Sectores</MudText>
+                    <MudIcon Icon="@Icons.Material.Filled.Apartment" Color="Color.Primary" Size="Size.Small" />
+                </div>
+                <MudText Typo="Typo.h4" Style="font-weight:600;">@_r.PorSector.Count</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="6" sm="3">
+            <MudPaper Class="pa-4" Elevation="1">
+                <div class="d-flex align-center justify-space-between">
+                    <MudText Typo="Typo.overline" Color="Color.Secondary">Antigüedad promedio</MudText>
+                    <MudIcon Icon="@Icons.Material.Filled.History" Color="Color.Primary" Size="Size.Small" />
+                </div>
+                <MudText Typo="Typo.h4" Style="font-weight:600;">@(_r.AntiguedadPromedioAnios is { } a ? $"{a:0.#} años" : "—")</MudText>
+                @if (_r.SinFechaIngreso > 0)
+                {
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">@_r.SinFechaIngreso sin fecha de ingreso en Humand</MudText>
+                }
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="6" sm="3">
+            <MudPaper Class="pa-4" Elevation="1">
+                <div class="d-flex align-center justify-space-between">
+                    <MudText Typo="Typo.overline" Color="Color.Secondary">Edad promedio</MudText>
+                    <MudIcon Icon="@Icons.Material.Filled.Cake" Color="Color.Primary" Size="Size.Small" />
+                </div>
+                <MudText Typo="Typo.h4" Style="font-weight:600;">@(_r.EdadPromedioAnios is { } e ? $"{e:0.#} años" : "—")</MudText>
+                @if (_r.SinFechaNacimiento > 0)
+                {
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">@_r.SinFechaNacimiento sin fecha de nacimiento en Humand</MudText>
+                }
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+
+    <MudGrid Class="mt-1" Spacing="2">
+        <MudItem xs="12" md="6">
+            <MudPaper Class="pa-4" Elevation="1">
+                <MudText Typo="Typo.subtitle1" Style="font-weight:600;" Class="mb-2">Cantidad por sector</MudText>
+                @foreach (var d in _r.PorSector)
+                {
+                    <BarraDistribucion Etiqueta="@d.Etiqueta" Cantidad="@d.Cantidad" Max="@_r.PorSector.Max(x => x.Cantidad)" Total="@_r.Activos" />
+                }
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" md="6">
+            <MudPaper Class="pa-4" Elevation="1">
+                <MudText Typo="Typo.subtitle1" Style="font-weight:600;" Class="mb-2">Por turno</MudText>
+                @foreach (var d in _r.PorTurno)
+                {
+                    <BarraDistribucion Etiqueta="@d.Etiqueta" Cantidad="@d.Cantidad" Max="@_r.PorTurno.Max(x => x.Cantidad)" Total="@_r.Activos" />
+                }
+                @if (_r.PorSexo.Count > 0)
+                {
+                    <MudText Typo="Typo.subtitle1" Style="font-weight:600;" Class="mb-2 mt-4">Por sexo</MudText>
+                    @foreach (var d in _r.PorSexo)
+                    {
+                        <BarraDistribucion Etiqueta="@d.Etiqueta" Cantidad="@d.Cantidad" Max="@_r.PorSexo.Max(x => x.Cantidad)" Total="@_r.PorSexo.Sum(x => x.Cantidad)" />
+                    }
+                }
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+
+    @if (_r.AntiguedadBuckets.Count > 0 || _r.EdadBuckets.Count > 0)
+    {
+        <MudGrid Class="mt-1" Spacing="2">
+            @if (_r.AntiguedadBuckets.Count > 0)
+            {
+                <MudItem xs="12" md="6">
+                    <MudPaper Class="pa-4" Elevation="1">
+                        <MudText Typo="Typo.subtitle1" Style="font-weight:600;" Class="mb-2">Antigüedad</MudText>
+                        @foreach (var d in _r.AntiguedadBuckets)
+                        {
+                            <BarraDistribucion Etiqueta="@d.Etiqueta" Cantidad="@d.Cantidad" Max="@_r.AntiguedadBuckets.Max(x => x.Cantidad)" Total="@_r.AntiguedadBuckets.Sum(x => x.Cantidad)" />
+                        }
+                    </MudPaper>
+                </MudItem>
+            }
+            @if (_r.EdadBuckets.Count > 0)
+            {
+                <MudItem xs="12" md="6">
+                    <MudPaper Class="pa-4" Elevation="1">
+                        <MudText Typo="Typo.subtitle1" Style="font-weight:600;" Class="mb-2">Pirámide etaria</MudText>
+                        @foreach (var d in _r.EdadBuckets)
+                        {
+                            <BarraDistribucion Etiqueta="@d.Etiqueta" Cantidad="@d.Cantidad" Max="@_r.EdadBuckets.Max(x => x.Cantidad)" Total="@_r.EdadBuckets.Sum(x => x.Cantidad)" />
+                        }
+                    </MudPaper>
+                </MudItem>
+            }
+        </MudGrid>
+    }
+
+    <MudGrid Class="mt-1" Spacing="2">
+        <MudItem xs="12" md="5">
+            <MudPaper Class="pa-4" Elevation="1">
+                <MudText Typo="Typo.subtitle1" Style="font-weight:600;" Class="mb-2">
+                    <MudIcon Icon="@Icons.Material.Filled.Cake" Size="Size.Small" Class="mr-1" />Cumpleaños del mes
+                </MudText>
+                @if (_r.CumplesDelMes.Count == 0)
+                {
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">Nadie cumple este mes (o Humand no tiene fechas de nacimiento cargadas).</MudText>
+                }
+                else
+                {
+                    <MudSimpleTable Dense="true">
+                        <tbody>
+                            @foreach (var c in _r.CumplesDelMes)
+                            {
+                                <tr>
+                                    <td style="width:40px;font-weight:600;">@c.Dia</td>
+                                    <td>@c.ApellidoNombre</td>
+                                    <td style="color:var(--mud-palette-text-secondary);">@(c.Area ?? "—")</td>
+                                    <td style="text-align:right;color:var(--mud-palette-text-secondary);">@c.CumpleAnios años</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </MudSimpleTable>
+                }
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" md="7">
+            <MudPaper Class="pa-4" Elevation="1">
+                <MudText Typo="Typo.subtitle1" Style="font-weight:600;" Class="mb-2">
+                    <MudIcon Icon="@Icons.Material.Filled.AccountTree" Size="Size.Small" Class="mr-1" />Esquema de jefes
+                </MudText>
+                @if (_r.Jefes.Count == 0)
+                {
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">
+                        Humand no tiene vínculos jefe→empleado cargados (relationships). Al cargarlos en Humand, este bloque se arma solo.
+                    </MudText>
+                }
+                else
+                {
+                    <MudExpansionPanels Dense="true" Elevation="0">
+                        @foreach (var j in _r.Jefes)
+                        {
+                            <MudExpansionPanel>
+                                <TitleContent>
+                                    <div class="d-flex align-center justify-space-between" style="width:100%;">
+                                        <MudText Typo="Typo.body2" Style="font-weight:600;">@j.JefeNombre</MudText>
+                                        <div class="d-flex align-center gap-2">
+                                            <MudText Typo="Typo.caption" Color="Color.Secondary">@(j.JefeArea ?? "")</MudText>
+                                            <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Text">@j.Cantidad a cargo</MudChip>
+                                        </div>
+                                    </div>
+                                </TitleContent>
+                                <ChildContent>
+                                    <MudText Typo="Typo.body2">@string.Join(" · ", j.Reportes)</MudText>
+                                </ChildContent>
+                            </MudExpansionPanel>
+                        }
+                    </MudExpansionPanels>
+                }
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    private bool _loading = true;
+    private DemografiaReporte? _r;
+
+    protected override async Task OnInitializedAsync() => await Cargar();
+
+    private async Task Cargar()
+    {
+        _loading = true;
+        try { _r = await DemografiaSrv.ReporteAsync(); }
+        catch (Exception ex)
+        {
+            _r = null;
+            Snackbar.Add($"Error al consultar Humand: {ex.Message}", Severity.Error);
+        }
+        finally { _loading = false; }
+    }
+}

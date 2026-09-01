@@ -23,6 +23,7 @@ public static class ServiceCollectionExtensions
         services.Configure<TwilioOptions>(config.GetSection(TwilioOptions.SectionName));
         services.Configure<SsoOptions>(config.GetSection(SsoOptions.SectionName));
         services.Configure<AsistenteOptions>(config.GetSection(AsistenteOptions.SectionName));
+        services.Configure<FeaturesOptions>(config.GetSection(FeaturesOptions.SectionName));
 
         // Integración Humand (real o simulada según Humand:UseMock)
         var useMock = config.GetValue<bool>($"{HumandOptions.SectionName}:UseMock");
@@ -42,6 +43,10 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IAusentismoService, AusentismoService>();
         services.AddScoped<ILicenciaManualService, LicenciaManualService>();
         services.AddScoped<ISsoTicketService, SsoTicketService>();
+        // Secciones nuevas del mega tablero (ago-2026), apagables vía Features:*
+        services.AddScoped<ITardanzasService, TardanzasService>();
+        services.AddScoped<IVacacionesService, VacacionesService>();
+        services.AddScoped<IDemografiaService, DemografiaService>();
         services.AddMemoryCache();
 
         // Asistente IA de consultas (chat sobre los datos del tablero)

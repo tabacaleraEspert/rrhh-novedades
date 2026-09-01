@@ -1,0 +1,21 @@
+@* Renglón de distribución con barra proporcional (Demografía). El ancho es relativo
+   al máximo del bloque para que el más grande ocupe todo y el resto se compare. *@
+<div class="d-flex align-center gap-2 mb-1">
+    <MudText Typo="Typo.body2" Style="width:130px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="@Etiqueta">@Etiqueta</MudText>
+    <div style="flex:1;background:var(--mud-palette-background-gray);border-radius:4px;height:18px;overflow:hidden;">
+        <div style="width:@(Ancho())%;background:var(--mud-palette-primary);height:100%;border-radius:4px;min-width:2px;"></div>
+    </div>
+    <MudText Typo="Typo.body2" Style="width:70px;flex-shrink:0;text-align:right;">
+        <b>@Cantidad</b> <span style="color:var(--mud-palette-text-secondary);">(@Pct())</span>
+    </MudText>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Etiqueta { get; set; } = "";
+    [Parameter, EditorRequired] public int Cantidad { get; set; }
+    [Parameter, EditorRequired] public int Max { get; set; }
+    [Parameter, EditorRequired] public int Total { get; set; }
+
+    private string Ancho() => (Max == 0 ? 0 : Cantidad * 100.0 / Max).ToString("0.#", System.Globalization.CultureInfo.InvariantCulture);
+    private string Pct() => Total == 0 ? "0%" : (Cantidad * 100.0 / Total).ToString("0") + "%";
+}

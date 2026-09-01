@@ -1,0 +1,242 @@
+@page "/vacaciones"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject IVacacionesService VacacionesSrv
+@inject IReloj Reloj
+@inject ISnackbar Snackbar
+@inject Microsoft.Extensions.Options.IOptions<RRHHNovedades.Web.Options.FeaturesOptions> Features
+@using RRHHNovedades.Web.Services
+
+<PageTitle>Vacaciones - RRHH</PageTitle>
+
+@if (!Features.Value.Vacaciones)
+{
+    <MudAlert Severity="Severity.Info" Class="mt-4">
+        La sección Vacaciones está deshabilitada (Features:Vacaciones). Las secciones históricas del tablero no cambian.
+    </MudAlert>
+    return;
+}
+
+<div class="d-flex align-center justify-space-between mb-1 flex-wrap gap-2">
+    <div>
+        <div class="d-flex align-center gap-2">
+            <MudText Typo="Typo.h5" Style="font-weight:600;">Vacaciones</MudText>
+            <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Filled">Nuevo</MudChip>
+        </div>
+        <MudText Typo="Typo.body2" Color="Color.Secondary">
+            Saldos y solicitudes <b>en vivo desde Humand</b> (no dependen del sync diario; cache 10 min).
+            El semáforo marca saldo acumulado alto: ≥ @Features.Value.SaldoVacacionesAdvertencia días advertencia,
+            ≥ @Features.Value.SaldoVacacionesRiesgo días riesgo.
+        </MudText>
+    </div>
+    <div class="d-flex align-center gap-2 flex-wrap">
+        <MudSelect T="string" Label="Área" Value="_area" ValueChanged="OnAreaChanged" Clearable="true"
+                   Style="min-width:180px;" Margin="Margin.Dense" Dense="true">
+            @foreach (var a in _areas)
+            {
+                <MudSelectItem T="string" Value="@a">@a</MudSelectItem>
+            }
+        </MudSelect>
+        <MudButton Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.Refresh"
+                   OnClick="Cargar" Disabled="_loading">Actualizar</MudButton>
+    </div>
+</div>
+
+<MudGrid Class="mt-1" Spacing="2">
+    <MudItem xs="6" sm="3">
+        <MudPaper Class="pa-4" Elevation="1">
+            <div class="d-flex align-center justify-space-between">
+                <MudText Typo="Typo.overline" Color="Color.Secondary">Con saldo pendiente</MudText>
+                <MudIcon Icon="@Icons.Material.Filled.BeachAccess" Color="Color.Primary" Size="Size.Small" />
+            </div>
+            <MudText Typo="Typo.h4" Style="font-weight:600;">@_saldosFiltrados.Count(s => s.Dias > 0)</MudText>
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="6" sm="3">
+        <MudPaper Class="pa-4" Elevation="1">
+            <div class="d-flex align-center justify-space-between">
+                <MudText Typo="Typo.overline" Color="Color.Secondary">Días pendientes (total)</MudText>
+                <MudIcon Icon="@Icons.Material.Filled.EventAvailable" Color="Color.Primary" Size="Size.Small" />
+            </div>
+            <MudText Typo="Typo.h4" Style="font-weight:600;">@_saldosFiltrados.Sum(s => s.Dias).ToString("0.#")</MudText>
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="6" sm="3">
+        <MudPaper Class="pa-4" Elevation="1">
+            <div class="d-flex align-center justify-space-between">
+                <MudText Typo="Typo.overline" Color="Color.Secondary">Saldo alto (semáforo)</MudText>
+                <MudIcon Icon="@Icons.Material.Filled.Warning" Color="Color.Warning" Size="Size.Small" />
+            </div>
+            <MudText Typo="Typo.h4" Style="font-weight:600;">@_saldosFiltrados.Count(s => s.Semaforo != SaldoSemaforo.Ok)</MudText>
+            <MudText Typo="Typo.caption" Color="Color.Secondary">@_saldosFiltrados.Count(s => s.Semaforo == SaldoSemaforo.Riesgo) en riesgo</MudText>
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="6" sm="3">
+        <MudPaper Class="pa-4" Elevation="1">
+            <div class="d-flex align-center justify-space-between">
+                <MudText Typo="Typo.overline" Color="Color.Secondary">De licencia hoy</MudText>
+                <MudIcon Icon="@Icons.Material.Filled.FlightTakeoff" Color="Color.Primary" Size="Size.Small" />
+            </div>
+            <MudText Typo="Typo.h4" Style="font-weight:600;">@_solicitudesFiltradas.Count(s => s.EnCurso)</MudText>
+        </MudPaper>
+    </MudItem>
+</MudGrid>
+
+<MudTabs Elevation="1" Rounded="true" ApplyEffectsToContainer="true" Class="mt-3">
+    <MudTabPanel Text="Saldos">
+        <MudTable T="SaldoVacaciones" Items="_saldosFiltrados" Dense="true" Hover="true" Loading="_loading" Breakpoint="Breakpoint.Sm">
+            <ToolBarContent>
+                <MudTextField @bind-Value="_buscar" Placeholder="Buscar por nombre, legajo o área" Adornment="Adornment.Start"
+                              AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Small" Class="mt-0" Immediate="true" />
+            </ToolBarContent>
+            <NoRecordsContent><MudText>Sin saldos de vacaciones@(_area is null ? "" : $" en {_area}").</MudText></NoRecordsContent>
+            <HeaderContent>
+                <MudTh>Empleado</MudTh>
+                <MudTh>Área</MudTh>
+                <MudTh Style="text-align:right;">Días pendientes</MudTh>
+                <MudTh>Alerta</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Empleado">@context.ApellidoNombre</MudTd>
+                <MudTd DataLabel="Área">@(context.Area ?? "—")</MudTd>
+                <MudTd DataLabel="Días pendientes" Style="text-align:right;font-weight:600;">@context.Dias.ToString("0.#")</MudTd>
+                <MudTd DataLabel="Alerta">
+                    @switch (context.Semaforo)
+                    {
+                        case SaldoSemaforo.Riesgo:
+                            <MudChip T="string" Size="Size.Small" Color="Color.Error" Variant="Variant.Filled">Riesgo</MudChip>
+                            break;
+                        case SaldoSemaforo.Advertencia:
+                            <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Filled">Alto</MudChip>
+                            break;
+                        default:
+                            <span>—</span>
+                            break;
+                    }
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+    </MudTabPanel>
+    <MudTabPanel Text="Solicitudes">
+        <div class="d-flex align-center gap-2 pa-3 pb-0 flex-wrap">
+            <MudDatePicker Label="Desde" Date="_desdeDt" DateChanged="OnDesdeChanged" Margin="Margin.Dense"
+                           DateFormat="dd/MM/yyyy" Style="min-width:140px;" />
+            <MudDatePicker Label="Hasta" Date="_hastaDt" DateChanged="OnHastaChanged" Margin="Margin.Dense"
+                           DateFormat="dd/MM/yyyy" Style="min-width:140px;" />
+        </div>
+        <MudTable T="SolicitudVacaciones" Items="_solicitudesFiltradas" Dense="true" Hover="true" Loading="_loading" Breakpoint="Breakpoint.Sm">
+            <NoRecordsContent><MudText>Sin solicitudes en el rango.</MudText></NoRecordsContent>
+            <HeaderContent>
+                <MudTh>Empleado</MudTh>
+                <MudTh>Área</MudTh>
+                <MudTh>Política</MudTh>
+                <MudTh>Desde</MudTh>
+                <MudTh>Hasta</MudTh>
+                <MudTh Style="text-align:right;">Días</MudTh>
+                <MudTh>Estado</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Empleado">
+                    @context.ApellidoNombre
+                    @if (context.EnCurso)
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Text">hoy</MudChip>
+                    }
+                </MudTd>
+                <MudTd DataLabel="Área">@(context.Area ?? "—")</MudTd>
+                <MudTd DataLabel="Política">@context.Politica</MudTd>
+                <MudTd DataLabel="Desde">@context.Desde.ToString("dd/MM/yyyy")</MudTd>
+                <MudTd DataLabel="Hasta">@context.Hasta.ToString("dd/MM/yyyy")</MudTd>
+                <MudTd DataLabel="Días" Style="text-align:right;">@context.Dias.ToString("0.#")</MudTd>
+                <MudTd DataLabel="Estado">
+                    @if (context.Estado == "APPROVED")
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Text">Aprobada</MudChip>
+                    }
+                    else
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="Color.Default" Variant="Variant.Text">En revisión</MudChip>
+                    }
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+    </MudTabPanel>
+</MudTabs>
+
+@code {
+    private DateOnly _desde;
+    private DateOnly _hasta;
+    private DateTime? _desdeDt;
+    private DateTime? _hastaDt;
+    private string? _area;
+    private List<string> _areas = [];
+    private bool _loading = true;
+    private VacacionesReporte? _reporte;
+    private string _buscar = string.Empty;
+
+    private List<SaldoVacaciones> _saldosFiltrados =>
+        (_reporte?.Saldos ?? [])
+        .Where(s => (_area is null || s.Area == _area) && PasaBusqueda(s.ApellidoNombre, s.Legajo, s.Area))
+        .ToList();
+
+    private List<SolicitudVacaciones> _solicitudesFiltradas =>
+        (_reporte?.Solicitudes ?? [])
+        .Where(s => (_area is null || s.Area == _area) && PasaBusqueda(s.ApellidoNombre, s.Legajo, s.Area))
+        .ToList();
+
+    private bool PasaBusqueda(string nombre, string? legajo, string? area)
+    {
+        if (string.IsNullOrWhiteSpace(_buscar)) return true;
+        var q = _buscar.Trim().ToLowerInvariant();
+        return nombre.ToLowerInvariant().Contains(q)
+            || (area ?? "").ToLowerInvariant().Contains(q)
+            || (legajo ?? "").ToLowerInvariant().Contains(q);
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var hoy = Reloj.Hoy;
+        // Solicitudes: ventana amplia por default — un mes para atrás y dos para adelante
+        // (lo que está pasando + lo ya aprobado que viene).
+        _desde = hoy.AddMonths(-1);
+        _hasta = hoy.AddMonths(2);
+        _desdeDt = _desde.ToDateTime(TimeOnly.MinValue);
+        _hastaDt = _hasta.ToDateTime(TimeOnly.MinValue);
+        await Cargar();
+    }
+
+    private async Task OnDesdeChanged(DateTime? d)
+    {
+        if (d is null) return;
+        _desdeDt = d; _desde = DateOnly.FromDateTime(d.Value);
+        await Cargar();
+    }
+
+    private async Task OnHastaChanged(DateTime? d)
+    {
+        if (d is null) return;
+        _hastaDt = d; _hasta = DateOnly.FromDateTime(d.Value);
+        await Cargar();
+    }
+
+    private void OnAreaChanged(string? a) => _area = string.IsNullOrEmpty(a) ? null : a;
+
+    private async Task Cargar()
+    {
+        if (_hasta < _desde) return;
+        _loading = true;
+        try
+        {
+            _reporte = await VacacionesSrv.ReporteAsync(_desde, _hasta);
+            _areas = _reporte.Saldos.Select(s => s.Area).Concat(_reporte.Solicitudes.Select(s => s.Area))
+                .Where(a => !string.IsNullOrWhiteSpace(a)).Select(a => a!).Distinct().OrderBy(a => a).ToList();
+            if (_area is not null && !_areas.Contains(_area)) _area = null;
+        }
+        catch (Exception ex)
+        {
+            _reporte = null;
+            Snackbar.Add($"Error al consultar Humand: {ex.Message}", Severity.Error);
+        }
+        finally { _loading = false; }
+    }
+}

@@ -1,4 +1,5 @@
 @inject NavigationManager Nav
+@inject Microsoft.Extensions.Options.IOptions<RRHHNovedades.Web.Options.FeaturesOptions> Features
 
 <MudNavMenu>
     <MudNavLink Href="/" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Dashboard">
@@ -19,6 +20,38 @@
     <MudNavLink Href="/ausentismo" Icon="@Icons.Material.Filled.EventBusy">
         Ausentismo
     </MudNavLink>
+
+    @* ── Secciones NUEVAS del mega tablero (ago-2026) ─────────────────────────
+       Van agrupadas y con chip "Nuevo" para distinguirlas del sistema original.
+       Cada una se apaga por config (Features:*) sin deploy. *@
+    @if (Features.Value.Tardanzas || Features.Value.Vacaciones || Features.Value.Demografia)
+    {
+        <div class="px-4 pt-3 pb-1 d-flex align-center gap-2">
+            <MudText Typo="Typo.overline" Color="Color.Secondary" Style="letter-spacing:.1em;">Nuevo</MudText>
+            <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Filled"
+                     Style="height:16px;font-size:0.6rem;">beta</MudChip>
+        </div>
+        @if (Features.Value.Tardanzas)
+        {
+            <MudNavLink Href="/tardanzas" Icon="@Icons.Material.Filled.Timer">
+                Tardanzas
+            </MudNavLink>
+        }
+        @if (Features.Value.Vacaciones)
+        {
+            <MudNavLink Href="/vacaciones" Icon="@Icons.Material.Filled.BeachAccess">
+                Vacaciones
+            </MudNavLink>
+        }
+        @if (Features.Value.Demografia)
+        {
+            <MudNavLink Href="/demografia" Icon="@Icons.Material.Filled.Diversity3">
+                Demografía
+            </MudNavLink>
+        }
+        <MudDivider Class="my-1" />
+    }
+
     <AuthorizeView Roles="Admin,RRHH">
         <MudNavLink Href="/configuracion" Icon="@Icons.Material.Filled.Settings">
             Configuración

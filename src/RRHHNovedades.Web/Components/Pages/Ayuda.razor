@@ -154,6 +154,45 @@
 
     <MudExpansionPanel>
         <TitleContent>
+            <div class="d-flex align-center gap-2"><MudIcon Icon="@Icons.Material.Filled.Timer" Color="Color.Warning" /><MudText Style="font-weight:600;">Tardanzas (sección nueva)</MudText><MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Filled">Nuevo</MudChip></div>
+        </TitleContent>
+        <ChildContent>
+            <MudList T="string" Dense="true">
+                <MudListItem T="string" Icon="@Icons.Material.Filled.TableChart">La página <b>Tardanzas</b> muestra, para el rango que elijas (últimos 30 días por defecto), quién llegó tarde, <b>cuántas veces</b>, los <b>minutos</b> perdidos (total y promedio) y la <b>racha</b>: días de trabajo seguidos llegando tarde. Un franco o feriado en el medio no corta la racha; un día llegando en hora sí.</MudListItem>
+                <MudListItem T="string" Icon="@Icons.Material.Filled.PriorityHigh">Con racha de <b>3 o más días</b> la fila se marca en rojo (reincidente) y suma al contador de arriba. La tardanza la marca Humand con el fichaje real (igual que en el Dashboard); acá se ve el acumulado del período, no solo el día.</MudListItem>
+                <MudListItem T="string" Icon="@Icons.Material.Filled.Download">Clic en una fila abre el detalle día por día. El botón <b>Excel</b> descarga Resumen + Detalle, respetando el filtro de área.</MudListItem>
+            </MudList>
+        </ChildContent>
+    </MudExpansionPanel>
+
+    <MudExpansionPanel>
+        <TitleContent>
+            <div class="d-flex align-center gap-2"><MudIcon Icon="@Icons.Material.Filled.BeachAccess" Color="Color.Warning" /><MudText Style="font-weight:600;">Vacaciones (sección nueva)</MudText><MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Filled">Nuevo</MudChip></div>
+        </TitleContent>
+        <ChildContent>
+            <MudList T="string" Dense="true">
+                <MudListItem T="string" Icon="@Icons.Material.Filled.AccountBalanceWallet">La pestaña <b>Saldos</b> muestra los <b>días de vacaciones pendientes</b> de cada empleado, directo de Humand (no depende del sync diario; se refresca cada 10 minutos o con el botón Actualizar). El <b>semáforo</b> avisa saldos acumulados altos: naranja desde 21 días, rojo desde 35 (umbrales configurables por Sistemas).</MudListItem>
+                <MudListItem T="string" Icon="@Icons.Material.Filled.ListAlt">La pestaña <b>Solicitudes</b> lista las licencias y vacaciones <b>aprobadas o en revisión</b> del rango elegido (por defecto: un mes para atrás y dos para adelante). Las que están transcurriendo hoy llevan el chip <b>"hoy"</b>.</MudListItem>
+                <MudListItem T="string" Icon="@Icons.Material.Filled.Info">Estos datos salen de las solicitudes de time-off de Humand. Si un saldo no coincide, revisarlo en Humand: acá no se edita nada, es solo lectura.</MudListItem>
+            </MudList>
+        </ChildContent>
+    </MudExpansionPanel>
+
+    <MudExpansionPanel>
+        <TitleContent>
+            <div class="d-flex align-center gap-2"><MudIcon Icon="@Icons.Material.Filled.Diversity3" Color="Color.Warning" /><MudText Style="font-weight:600;">Demografía (sección nueva)</MudText><MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Filled">Nuevo</MudChip></div>
+        </TitleContent>
+        <ChildContent>
+            <MudList T="string" Dense="true">
+                <MudListItem T="string" Icon="@Icons.Material.Filled.TableChart">La página <b>Demografía</b> es la foto de la dotación <b>activa</b>: cantidad por <b>sector</b>, por <b>turno</b> (mañana/tarde/noche) y por <b>sexo</b>, <b>antigüedad</b> (promedio y por rangos), <b>pirámide etaria</b>, <b>cumpleaños del mes</b> y el <b>esquema de jefes</b> con cuánta gente tiene a cargo cada uno (clic para ver los nombres).</MudListItem>
+                <MudListItem T="string" Icon="@Icons.Material.Filled.CloudDone">Todo sale <b>en vivo de Humand</b> (se refresca cada 10 minutos o con el botón Actualizar): fechas de ingreso y nacimiento, segmentaciones y los vínculos jefe→empleado. <b>Si un bloque aparece vacío o incompleto, es porque ese dato no está cargado en Humand</b> — al completarlo allá, acá aparece solo. Los contadores "N sin fecha…" avisan cuántos legajos les falta el dato.</MudListItem>
+                <MudListItem T="string" Icon="@Icons.Material.Filled.Info">Es solo lectura: para corregir un sector, una fecha o un jefe, se edita en Humand.</MudListItem>
+            </MudList>
+        </ChildContent>
+    </MudExpansionPanel>
+
+    <MudExpansionPanel>
+        <TitleContent>
             <div class="d-flex align-center gap-2"><MudIcon Icon="@Icons.Material.Filled.Schedule" Color="Color.Primary" /><MudText Style="font-weight:600;">¿Cuándo se actualizan los datos?</MudText></div>
         </TitleContent>
         <ChildContent>
