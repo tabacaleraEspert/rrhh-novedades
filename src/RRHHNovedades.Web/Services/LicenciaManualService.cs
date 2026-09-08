@@ -91,7 +91,7 @@ public class LicenciaManualService(IDbContextFactory<AppDbContext> dbFactory, IR
 
         // Retroactivo sobre lo ya ingestado: injustificadas y pendientes del período pasan a
         // justificadas con este motivo. (Presente/Tarde/Franco/Feriado no se tocan: si vino, vino.)
-        var afectadas = await db.Novedades
+        var afectadas = await db.Novedades.IgnoreQueryFilters()
             .Where(n => n.EmpleadoId == empleadoId && n.Fecha >= desde && (hasta == null || n.Fecha <= hasta)
                 && (n.Estado == EstadoJornada.AusenteInjustificado || n.Estado == EstadoJornada.Pendiente))
             .ToListAsync(ct);
@@ -110,13 +110,13 @@ public class LicenciaManualService(IDbContextFactory<AppDbContext> dbFactory, IR
     public async Task<int> EliminarAsync(int licenciaId, CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
-        var lic = await db.LicenciasManuales.FirstOrDefaultAsync(l => l.Id == licenciaId, ct);
+        var lic = await db.LicenciasManuales.IgnoreQueryFilters().FirstOrDefaultAsync(l => l.Id == licenciaId, ct);
         if (lic is null) return 0;
 
         // Revierte SOLO los días que justificó una licencia manual (EsManual). Si hubiera otra
         // licencia manual solapada del mismo empleado, el próximo sync del día la re-aplica.
         var hoy = reloj.Hoy;
-        var afectadas = await db.Novedades
+        var afectadas = await db.Novedades.IgnoreQueryFilters()
             .Where(n => n.EmpleadoId == lic.EmpleadoId && n.Fecha >= lic.Desde
                 && (lic.Hasta == null || n.Fecha <= lic.Hasta) && n.EsManual)
             .ToListAsync(ct);

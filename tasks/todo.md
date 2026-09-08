@@ -90,3 +90,16 @@ F1 completo → validar con RRHH → F2 → F3. Cada fase se deploya sola.
 3. ¿Aprovechamos F2 para migrar EnsureCreated → EF Migrations (deuda #1 del
    repo) o seguimos con DDL manual?
 4. Umbrales de semáforo de vacaciones: ¿21/35 días como el CC?
+
+
+## Empleados bloqueados (⛔ en Humand) — 2026-09-08 ✅
+
+Pedido Davor: los ⛔ no van más por WhatsApp; en el resto de la app, config para mostrar/ocultar.
+Spec/plan/tasks en `specs/0001-empleados-bloqueados/`.
+- [x] Modelo + filtro global EF + ingesta + parte + scheduler + UI + Ayuda + tests + smoke + DDL
+- [x] DDL en prod aplicado 2026-09-08 (`infra/run-ddl.sh` arreglado: identidad+secreto por `az rest`, extensión containerapp 1.2.0b4 rota)
+- [ ] Sync de empleados post-deploy
+
+### Review
+Filtro global elegido sobre filtrar a mano en ~12 consultas: cubre asistente y pantallas futuras;
+opt-out explícito solo en ingesta/parte/licencias. Sin `VisibilidadEmpleados` (tests) se ve todo.

@@ -123,7 +123,9 @@ ALTER TABLE "ConfiguracionParte" ADD COLUMN IF NOT EXISTS "HoraParteNoche" chara
 Como la DB no tiene acceso público, todo DDL manual se ejecuta con un Container Apps Job efímero
 dentro del entorno: `bash infra/run-ddl.sh '<SQL>'` (usar SQL idempotente; requiere `az login` con
 permisos en `rg-rrhh-prod`; el password sale de Key Vault vía Managed Identity y nunca toca la
-máquina local). Aplicados a la fecha:
+máquina local). Desde sep-2026 el script asigna la identidad y el secreto con `az rest` (PATCH ARM)
+porque la extensión `containerapp` 1.2.0b4 rompe `identity assign` y `job secret set`
+(IdentityDoesNotExist / InvalidIdentityValues). Aplicados a la fecha:
 
 ```sql
 -- 27-jul-2026 (turno noche) — APLICADO
@@ -142,6 +144,10 @@ CREATE TABLE IF NOT EXISTS "LicenciasManuales" (
 );
 CREATE INDEX IF NOT EXISTS "IX_LicenciasManuales_EmpleadoId" ON "LicenciasManuales" ("EmpleadoId");
 ALTER TABLE "Novedades" ADD COLUMN IF NOT EXISTS "EsManual" boolean NOT NULL DEFAULT FALSE;
+-- 08-sep-2026 (empleados bloqueados: ⛔ en Humand, fuera del parte; mostrar/ocultar en la app) — APLICADO 08-sep-2026
+--   script: bash infra/ddl-2026-09-08-empleados-bloqueados.sh
+ALTER TABLE "Empleados" ADD COLUMN IF NOT EXISTS "Bloqueado" boolean NOT NULL DEFAULT FALSE;
+ALTER TABLE "ConfiguracionParte" ADD COLUMN IF NOT EXISTS "MostrarBloqueados" boolean NOT NULL DEFAULT FALSE;
 ```
 
 El parte de noche sale a las 06:00 y reporta la jornada del día anterior. Los empleados nocturnos

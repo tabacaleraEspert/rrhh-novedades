@@ -3,6 +3,7 @@
 @rendermode InteractiveServer
 @inject IDbContextFactory<AppDbContext> DbFactory
 @inject IOptions<AsistenciaOptions> AsistenciaOpt
+@inject VisibilidadEmpleados Visibilidad
 @inject ISnackbar Snackbar
 @using Microsoft.AspNetCore.Components.Authorization
 @using Microsoft.Extensions.Options
@@ -73,6 +74,19 @@
             </MudList>
             <MudText Typo="Typo.caption" Color="Color.Secondary">
                 Los datos se actualizan solos antes de cada parte y en los horarios de auto-sync.
+            </MudText>
+        </MudPaper>
+
+        <MudPaper Class="pa-4 mt-4" Elevation="1">
+            <MudText Typo="Typo.subtitle1" Class="mb-2" Style="font-weight:600;">Empleados bloqueados</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-2">
+                Son los que en Humand tienen el símbolo <b>⛔</b> en el nombre. <b>Nunca salen en el parte de WhatsApp.</b>
+                Acá se define si se muestran o se ocultan en el resto del sistema (dashboard, planillas, listados y asistente).
+            </MudText>
+            <MudSwitch T="bool" Value="_mostrarBloqueados" ValueChanged="GuardarMostrarBloqueados" Color="Color.Primary"
+                       Label="@(_mostrarBloqueados ? "Se muestran en el sistema" : "Ocultos en el sistema")" />
+            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block">
+                Bloqueados detectados en la última sincronización: <b>@_cantBloqueados</b>. Se aplica al instante, sin reiniciar.
             </MudText>
         </MudPaper>
     </MudItem>
@@ -193,6 +207,8 @@
     private bool _resetVisible;
     private Usuario? _resetUser;
     private string _resetPwd = string.Empty;
+    private bool _mostrarBloqueados;
+    private int _cantBloqueados;
     private readonly DialogOptions _dlgOpts = new() { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true, CloseOnEscapeKey = true };
 
     protected override async Task OnInitializedAsync()
@@ -207,7 +223,25 @@
         _destinatarios = await db.Destinatarios.OrderBy(d => d.Nombre).ToListAsync();
         _usuarios = await db.Usuarios.OrderBy(u => u.Nombre).ToListAsync();
         var cfg = await db.ConfiguracionParte.FirstOrDefaultAsync();
-        if (cfg is not null) { _horaManana = cfg.HoraParteManana; _horaTarde = cfg.HoraParteTarde; _horaNoche = cfg.HoraParteNoche; }
+        if (cfg is not null)
+        {
+            _horaManana = cfg.HoraParteManana; _horaTarde = cfg.HoraParteTarde; _horaNoche = cfg.HoraParteNoche;
+            _mostrarBloqueados = cfg.MostrarBloqueados;
+        }
+        _cantBloqueados = await db.Empleados.IgnoreQueryFilters().CountAsync(e => e.Bloqueado);
+    }
+
+    // ---- Empleados bloqueados ----
+    private async Task GuardarMostrarBloqueados(bool valor)
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var cfg = await db.ConfiguracionParte.FirstOrDefaultAsync();
+        if (cfg is null) { cfg = new ConfiguracionParte(); db.ConfiguracionParte.Add(cfg); }
+        cfg.MostrarBloqueados = valor;
+        await db.SaveChangesAsync();
+        Visibilidad.MostrarBloqueados = valor;
+        _mostrarBloqueados = valor;
+        Snackbar.Add(valor ? "Los empleados bloqueados ahora se muestran en el sistema." : "Los empleados bloqueados quedan ocultos en el sistema.", Severity.Success);
     }
 
     // ---- Destinatarios ----

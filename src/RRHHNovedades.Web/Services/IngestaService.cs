@@ -33,7 +33,8 @@ public class IngestaService(
     {
         var remotos = await humand.ObtenerEmpleadosAsync(ct);
         await using var db = await dbFactory.CreateDbContextAsync(ct);
-        var locales = await db.Empleados.ToDictionaryAsync(e => e.EmployeeInternalId, ct);
+        // La ingesta ve TODOS los empleados (también los bloqueados ocultos): si no, se duplicarían.
+        var locales = await db.Empleados.IgnoreQueryFilters().ToDictionaryAsync(e => e.EmployeeInternalId, ct);
 
         foreach (var r in remotos)
         {
@@ -48,6 +49,9 @@ public class IngestaService(
             emp.Area = r.Area;
             emp.Legajo = r.Legajo;
             emp.Activo = true;
+            // Bloqueado = RRHH le puso ⛔ al nombre en Humand. Se sigue sincronizando (para poder
+            // mostrarlo si Configuración lo pide) pero nunca sale en el parte de WhatsApp.
+            emp.Bloqueado = EsBloqueado(r);
 
             // Turno noche: lo define la segmentación "Turno" de Humand (ej. "Turno C Noche"),
             // no el horario. Si el empleado deja de estar segmentado como nocturno, vuelve a
@@ -71,7 +75,7 @@ public class IngestaService(
     private async Task<int> SincronizarDiaCoreAsync(DateOnly fecha, int? soloEmpleadoId, CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
-        var empleados = await db.Empleados
+        var empleados = await db.Empleados.IgnoreQueryFilters()
             .Where(e => e.Activo && (soloEmpleadoId == null || e.Id == soloEmpleadoId))
             .ToListAsync(ct);
         if (empleados.Count == 0)
@@ -83,7 +87,7 @@ public class IngestaService(
         var porId = empleados.ToDictionary(e => e.EmployeeInternalId);
         var jornadas = await humand.ObtenerJornadasAsync(porId.Keys, fecha, ct);
 
-        var existentes = await db.Novedades
+        var existentes = await db.Novedades.IgnoreQueryFilters()
             .Where(n => n.Fecha == fecha)
             .ToDictionaryAsync(n => n.EmpleadoId, ct);
 
@@ -94,7 +98,7 @@ public class IngestaService(
         // (ventas, oficinas, dirección) no tienen horario en Humand y caerían como Franco todos
         // los días; para ellos, un día hábil sin feriado cuenta como Presente (regla RRHH 28-jul-2026).
         // Los fichadores conservan sus francos rotativos.
-        var fichadores = (await db.Novedades
+        var fichadores = (await db.Novedades.IgnoreQueryFilters()
             .Where(x => x.Fecha < fecha && x.Fecha >= fecha.AddDays(-30) && x.HoraEntrada != null)
             .Select(x => x.EmpleadoId)
             .Distinct()
@@ -103,7 +107,7 @@ public class IngestaService(
         // Licencias manuales de RRHH vigentes en la fecha: justifican lo que Humand marque
         // injustificado (o pendiente futuro) con el motivo cargado a mano. Puede haber más de
         // una vigente para el mismo empleado (rangos superpuestos): gana la de Desde más reciente.
-        var manuales = (await db.LicenciasManuales
+        var manuales = (await db.LicenciasManuales.IgnoreQueryFilters()
                 .Where(l => l.Desde <= fecha && (l.Hasta == null || l.Hasta >= fecha))
                 .ToListAsync(ct))
             .GroupBy(l => l.EmpleadoId)
@@ -222,6 +226,10 @@ public class IngestaService(
         && fecha.DayOfWeek is not (DayOfWeek.Saturday or DayOfWeek.Sunday)
         && !j.EsFeriado
         && !feriadosCfg.Contains(fecha);
+
+    // internal para testearla (InternalsVisibleTo RRHHNovedades.Tests).
+    internal static bool EsBloqueado(EmpleadoHumand r) =>
+        Empleado.TieneMarcaBloqueo(r.Nombre) || Empleado.TieneMarcaBloqueo(r.Apellido);
 
     // internal para testearla (InternalsVisibleTo RRHHNovedades.Tests).
     internal static bool EsSegmentacionNocturna(string? segTurno) =>

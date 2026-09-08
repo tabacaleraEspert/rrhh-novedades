@@ -17,6 +17,7 @@ public class ParteScheduler(
     IDbContextFactory<AppDbContext> dbFactory,
     IOptionsMonitor<AsistenciaOptions> asistencia,
     IReloj reloj,
+    VisibilidadEmpleados visibilidad,
     ILogger<ParteScheduler> logger) : BackgroundService
 {
     // Clave de disparo por día: "parte-Manana", "parte-Tarde", "sync-10:30", ...
@@ -87,7 +88,12 @@ public class ParteScheduler(
         {
             await using var db = await dbFactory.CreateDbContextAsync(ct);
             var cfg = await db.ConfiguracionParte.AsNoTracking().FirstOrDefaultAsync(ct);
-            if (cfg is not null) return (cfg.HoraParteManana, cfg.HoraParteTarde, cfg.HoraParteNoche);
+            if (cfg is not null)
+            {
+                // De paso, refresca la visibilidad de bloqueados (por si la cambió otra réplica).
+                visibilidad.MostrarBloqueados = cfg.MostrarBloqueados;
+                return (cfg.HoraParteManana, cfg.HoraParteTarde, cfg.HoraParteNoche);
+            }
         }
         catch (Exception ex)
         {

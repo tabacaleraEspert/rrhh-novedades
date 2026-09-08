@@ -60,6 +60,9 @@ var app = builder.Build();
     using var db = await factory.CreateDbContextAsync();
     await db.Database.EnsureCreatedAsync();
     await SeedData.InitializeAsync(db);
+    // Visibilidad de empleados bloqueados: la persiste ConfiguracionParte, la consume el filtro global.
+    var cfg = await db.ConfiguracionParte.AsNoTracking().FirstOrDefaultAsync();
+    app.Services.GetRequiredService<VisibilidadEmpleados>().MostrarBloqueados = cfg?.MostrarBloqueados ?? false;
 }
 
 // HTTP pipeline

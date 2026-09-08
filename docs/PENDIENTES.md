@@ -55,6 +55,17 @@ Plan de ejecución por etapas. Base funcional: `docs/Novedades_RRHH.pdf` (spec v
 >   (nombres y ausencias de empleados viajan al proveedor) y decidir si es cuenta propia de Espert.
 > - 139 tests verdes (35 nuevos: consultas, tools, compactador, loop con proveedor guionado,
 >   registro/purga) · health check `/ready` verifica que los .md llegaron al contenedor.
+>
+> **Novedad (08-sep-2026): empleados bloqueados (⛔ en Humand)** — spec `specs/0001-empleados-bloqueados/`.
+> - RRHH marca bloqueados agregando ⛔ al nombre en Humand (caso real del parte del 03/09: "FELICE ⛔").
+>   La sync los detecta (`Empleados.Bloqueado`); **nunca salen en el parte de WhatsApp**.
+> - Interruptor en Configuración (`ConfiguracionParte.MostrarBloqueados`, oculto por defecto) que
+>   muestra/oculta a los bloqueados en TODO el resto (dashboard, planillas, listados, asistente) vía
+>   filtro global de EF en `AppDbContext` (`VisibilidadEmpleados` en memoria; ingesta y parte usan
+>   `IgnoreQueryFilters`). Chip "Bloqueado" en Empleados. Ayuda actualizada.
+> - DDL APLICADO en prod el 08-sep-2026 (`infra/ddl-2026-09-08-empleados-bloqueados.sh`; de paso se
+>   arregló `run-ddl.sh` para la extensión containerapp 1.2.0b4). Después del deploy: sincronizar empleados (Bot de novedades) para marcar los ⛔ existentes.
+> - 188 tests verdes (5 nuevos) · smoke con EMP-011 bloqueado en el mock.
 
 ---
 

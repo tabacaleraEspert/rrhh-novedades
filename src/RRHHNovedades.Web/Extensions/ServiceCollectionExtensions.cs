@@ -35,6 +35,7 @@ public static class ServiceCollectionExtensions
         // Servicios de aplicación
         // Reloj único en hora Argentina: toda comparación/visualización de fecha-hora pasa por acá.
         services.AddSingleton<IReloj, RelojArgentino>();
+        services.AddSingleton<VisibilidadEmpleados>(); // flag "mostrar bloqueados" (lo lee el filtro global del DbContext)
         services.AddSingleton<ITwilioService, TwilioService>();
         services.AddScoped<IIngestaService, IngestaService>();
         services.AddScoped<IParteService, ParteService>();

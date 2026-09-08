@@ -63,6 +63,10 @@ tasa, Excel/PDF) y **licencias manuales** ("reserva de puesto": justifican injus
 retroactivo + ingesta, tabla `LicenciasManuales` + `Novedades.EsManual`). Bitácora completa y
 pendientes en `docs/PENDIENTES.md`. ⚠️ Todo cambio de esquema requiere DDL manual en prod ANTES
 del push (`infra/run-ddl.sh`, ver `docs/DEPLOY-AZURE.md`) porque se usa `EnsureCreated`.
+**Empleados bloqueados** (sep-2026): ⛔ en el nombre en Humand ⇒ `Empleado.Bloqueado`; nunca van al
+parte; en el resto de la app se muestran/ocultan con `ConfiguracionParte.MostrarBloqueados` vía
+**filtro global de EF** (`AppDbContext` + `VisibilidadEmpleados`). Toda consulta que deba ver TODO
+(ingesta, parte, correcciones) usa `IgnoreQueryFilters()`.
 
 ## Flujo del bot (lo principal)
 `ParteScheduler` dispara a las 07:00 (mañana) y 14:00 (tarde) — horarios en `Asistencia` (appsettings).

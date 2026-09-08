@@ -8,7 +8,13 @@
 <PageTitle>Empleados - RRHH</PageTitle>
 
 <MudText Typo="Typo.h5" Class="mb-1" Style="font-weight:600;">Empleados</MudText>
-<MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">@_empleados.Count empleados sincronizados desde Humand</MudText>
+<MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
+    @_empleados.Count empleados sincronizados desde Humand
+    @if (_bloqueadosOcultos > 0)
+    {
+        <text> · @_bloqueadosOcultos bloqueado@(_bloqueadosOcultos == 1 ? "" : "s") oculto@(_bloqueadosOcultos == 1 ? "" : "s") (se muestran desde <MudLink Href="/configuracion">Configuración</MudLink>)</text>
+    }
+</MudText>
 
 <MudPaper Elevation="1">
     <MudTable Items="_empleados" Dense="true" Hover="true" Loading="_loading" Filter="Filtra" Breakpoint="Breakpoint.Sm">
@@ -25,7 +31,14 @@
             <MudTh>ID Humand</MudTh>
         </HeaderContent>
         <RowTemplate>
-            <MudTd DataLabel="Apellido y nombre">@context.ApellidoNombre</MudTd>
+            <MudTd DataLabel="Apellido y nombre">
+                @context.ApellidoNombre
+                @if (context.Bloqueado)
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Error" Variant="Variant.Outlined" Class="ml-2"
+                             Icon="@Icons.Material.Filled.Block">Bloqueado</MudChip>
+                }
+            </MudTd>
             <MudTd DataLabel="Área">@(context.Area ?? "—")</MudTd>
             <MudTd DataLabel="Turno">@(context.Turno switch { Turno.Manana => "Mañana", Turno.Tarde => "Tarde", _ => "Noche" })</MudTd>
             <MudTd DataLabel="Teléfono">@(context.Telefono ?? "—")</MudTd>
@@ -38,11 +51,15 @@
     private List<Empleado> _empleados = [];
     private bool _loading = true;
     private string _buscar = string.Empty;
+    private int _bloqueadosOcultos;
 
     protected override async Task OnInitializedAsync()
     {
         await using var db = await DbFactory.CreateDbContextAsync();
+        // El filtro global ya oculta a los bloqueados si Configuración lo pide; acá solo se cuenta cuántos quedaron afuera.
         _empleados = await db.Empleados.OrderBy(e => e.Apellido).ThenBy(e => e.Nombre).ToListAsync();
+        var totalBloqueados = await db.Empleados.IgnoreQueryFilters().CountAsync(e => e.Bloqueado);
+        _bloqueadosOcultos = totalBloqueados - _empleados.Count(e => e.Bloqueado);
         _loading = false;
     }
 

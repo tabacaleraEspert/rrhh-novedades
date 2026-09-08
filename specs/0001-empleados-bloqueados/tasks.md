@@ -1,0 +1,12 @@
+# Tasks 0001 — Empleados bloqueados
+- [x] Modelo: `Empleado.Bloqueado`, `ConfiguracionParte.MostrarBloqueados`
+- [x] `VisibilidadEmpleados` + filtros globales en `AppDbContext` + DI + carga al arrancar
+- [x] Ingesta marca/desmarca; ve todo (`IgnoreQueryFilters`)
+- [x] Parte excluye bloqueados siempre
+- [x] Scheduler refresca la visibilidad en cada tick
+- [x] Configuración: switch · Empleados: chip + aviso · Ayuda: manual + fecha
+- [x] Mock EMP-011 + smoke checks
+- [x] Tests unitarios (5 nuevos) — 188 verdes
+- [x] DDL `infra/ddl-2026-09-08-empleados-bloqueados.sh` + `docs/DEPLOY-AZURE.md`
+- [x] DDL aplicado en prod (08-sep-2026)
+- [ ] Sincronizar empleados después del deploy (marca los ⛔ actuales)

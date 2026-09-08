@@ -89,6 +89,10 @@
                 Cada parte incluye: <b>presentes</b> (cantidad), y <b>tardanzas, ausentes y justificados con nombre y apellido</b>.
                 Se envía a los teléfonos del listado de <b>Configuración → Destinatarios del parte</b>.
             </MudText>
+            <MudText Typo="Typo.body2" Class="mb-2">
+                Los <b>empleados bloqueados</b> (los que en Humand tienen el símbolo <b>⛔</b> en el nombre) <b>no se incluyen
+                nunca</b> en el parte: ni en los presentes, ni en tardanzas, ausentes o justificados.
+            </MudText>
             <MudText Typo="Typo.body2">
                 Desde la página <b>Bot de novedades</b> también se puede: <b>previsualizar</b> el parte antes de que salga,
                 <b>enviarlo manualmente</b> en cualquier momento (pide <b>confirmación</b> antes de mandar, indicando a
@@ -216,6 +220,7 @@
                 <MudListItem T="string" Icon="@Icons.Material.Filled.ContactPhone"><b>Destinatarios del parte:</b> en Configuración se agregan/quitan los teléfonos que reciben los partes. Formato internacional: <code>+549</code> + código de área + número (ej. <code>+5491122334455</code>). El interruptor "Activo" permite pausar a alguien sin borrarlo.</MudListItem>
                 <MudListItem T="string" Icon="@Icons.Material.Filled.Schedule"><b>Horarios de los partes</b> (mañana, tarde y noche): se cambian en Configuración y se aplican sin reiniciar. Los de <b>auto-sync</b> se cambian en la configuración del servidor (pedirlo a Sistemas).</MudListItem>
                 <MudListItem T="string" Icon="@Icons.Material.Filled.People"><b>Empleados:</b> la lista se sincroniza sola desde Humand (altas, bajas y cambios de área). No se editan acá.</MudListItem>
+                <MudListItem T="string" Icon="@Icons.Material.Filled.Block"><b>Empleados bloqueados:</b> para bloquear a alguien se le agrega el símbolo <b>⛔</b> al nombre en Humand; en la próxima sincronización el sistema lo detecta. Un bloqueado <b>nunca sale en el parte de WhatsApp</b>. En Configuración hay un interruptor para <b>mostrarlos u ocultarlos</b> en el resto del sistema (dashboard, Presentismo, Nocturnidad, Ausentismo, Tardanzas, Empleados y asistente). Ocultos por defecto; en la lista de Empleados figuran con la etiqueta "Bloqueado" cuando se muestran.</MudListItem>
             </MudList>
         </ChildContent>
     </MudExpansionPanel>
@@ -270,5 +275,5 @@
 
 @code {
     // Actualizar esta fecha cada vez que se modifique el manual (ver CLAUDE.md → "Manual de uso").
-    private const string UltimaActualizacion = "26/08/2026";
+    private const string UltimaActualizacion = "08/09/2026";
 }

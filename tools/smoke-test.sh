@@ -75,8 +75,8 @@ login=$(curl -s -c "$COOKIES" -o /dev/null -w "%{http_code}" \
 [ "$login" = "302" ] && verde "  OK   login" || { rojo "  FAIL login (HTTP $login)"; FALLOS=$((FALLOS+1)); }
 
 sync=$(curl -s -b "$COOKIES" -X POST "$BASE/api/ops/sync")
-check "sync de 10 empleados mock" "$sync" '"empleados":10'
-check "10 novedades del día"      "$sync" '"novedades":10'
+check "sync de 11 empleados mock (1 bloqueado)" "$sync" '"empleados":11'
+check "11 novedades del día (el bloqueado también se ingesta)"      "$sync" '"novedades":11'
 
 echo "[4/5] Validando clasificación y parte (turno mañana)..."
 resumen=$(curl -s -b "$COOKIES" "$BASE/api/ops/resumen")
@@ -93,7 +93,8 @@ else
         verde "  OK   sin francos en día hábil"
     fi
 fi
-check "resumen: 1 ausente injust."     "$resumen" '"AusenteInjustificado":1'
+# El bloqueado (EMP-011, ausente) está oculto por defecto: no suma en el resumen (filtro global en Postgres).
+check "resumen: 1 ausente injust. (bloqueado oculto)" "$resumen" '"AusenteInjustificado":1'
 check "resumen: 2 justificados"        "$resumen" '"AusenteJustificado":2'
 
 parte=$(curl -s -b "$COOKIES" "$BASE/api/ops/parte/preview?turno=Manana")
@@ -102,6 +103,7 @@ check "parte: tardanza con nombre"     "$parte" "Tardanzas: 1 (Gómez, Rosa)"
 check "parte: ausente con nombre"      "$parte" "Ausentes: 1 (Sosa, Mario)"
 check "parte: justificados (2)"        "$parte" "Justificados: 2 (Díaz, Lucía; Ruiz, Pedro)"
 check "parte: pie fijo del template"   "$parte" "Reporte automático de asistencia"
+if echo "$parte" | grep -qF "Felice"; then rojo "  FAIL parte: el empleado bloqueado (⛔) NO debe salir por WhatsApp"; FALLOS=$((FALLOS+1)); else verde "  OK   parte: bloqueado (⛔) excluido"; fi
 
 parteT=$(curl -s -b "$COOKIES" "$BASE/api/ops/parte/preview?turno=Tarde")
 check "parte tarde: tardanza de López" "$parteT" "Tardanzas: 1 (López, Carla)"

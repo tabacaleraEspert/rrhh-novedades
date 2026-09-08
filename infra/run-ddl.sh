@@ -29,10 +29,6 @@ YAML=$(mktemp /tmp/job-rrhh-ddl.XXXXXX.yaml)
 trap 'rm -f "$YAML"' EXIT
 cat > "$YAML" <<EOF
 location: brazilsouth
-identity:
-  type: UserAssigned
-  userAssignedIdentities:
-    ${MI_ID}: {}
 properties:
   environmentId: ${ENV_ID}
   configuration:
@@ -76,12 +72,40 @@ for i in $(seq 1 24); do
 done
 az containerapp job create -g "$RG" -n "$JOB" --yaml "$YAML" -o none
 
-# El secreto de Key Vault se agrega DESPUÉS del create: si va en el create, ARM intenta
-# resolverlo antes de terminar de asociar la Managed Identity y falla (IdentityDoesNotExist).
-echo "==> 2/4 Vinculando secreto de Key Vault (vía Managed Identity)..."
-az containerapp job secret set -g "$RG" -n "$JOB" \
-  --secrets "connstr=keyvaultref:${KV_SECRET},identityref:${MI_ID}" -o none
-az containerapp job update -g "$RG" -n "$JOB" --set-env-vars "CONNSTR=secretref:connstr" -o none
+# La Managed Identity se asigna en un paso aparte vía ARM (PATCH): con la extensión containerapp
+# 1.2.0b4 (sep-2026) tanto el bloque `identity` del YAML como `job identity assign` fallan con
+# IdentityDoesNotExist. El PATCH directo funciona.
+echo "==> 1b/4 Asignando Managed Identity id-rrhh-prod al job (ARM PATCH)..."
+JOB_ID="/subscriptions/$SUB/resourceGroups/$RG/providers/Microsoft.App/jobs/$JOB"
+az rest --method patch --url "https://management.azure.com${JOB_ID}?api-version=2024-03-01" \
+  --body "{\"identity\":{\"type\":\"UserAssigned\",\"userAssignedIdentities\":{\"$MI_ID\":{}}}}" -o none
+sleep 5
+
+# Secreto de Key Vault + env CONNSTR: también por ARM PATCH (merge-patch). `job secret set` de la
+# extensión 1.2.0b4 relee el job y reenvía la identidad con clientId/principalId, y ARM lo rechaza
+# (InvalidIdentityValues). El PATCH reemplaza el array `containers`, por eso va el contenedor completo.
+echo "==> 2/4 Vinculando secreto de Key Vault (vía Managed Identity, ARM PATCH)..."
+PATCH=$(mktemp /tmp/job-rrhh-ddl.XXXXXX.json)
+trap 'rm -f "$YAML" "$PATCH"' EXIT
+DDL_SQL="$SQL" MI_ID="$MI_ID" KV_SECRET="$KV_SECRET" python3 - "$PATCH" <<'PY'
+import json, os, sys
+script = """set -e
+get(){ echo "$CONNSTR" | tr ";" "\n" | sed -n "s/^$1=//p"; }
+export PGHOST="$(get Host)" PGDATABASE="$(get Database)" PGUSER="$(get Username)" PGPASSWORD="$(get Password)" PGSSLMODE=require
+psql -v ON_ERROR_STOP=1 -c "$DDL_SQL"
+echo DDL_OK
+"""
+body = {"properties": {
+  "configuration": {"secrets": [{"name": "connstr", "keyVaultUrl": os.environ["KV_SECRET"], "identity": os.environ["MI_ID"]}]},
+  "template": {"containers": [{
+    "image": "postgres:16-alpine", "name": "ddl",
+    "command": ["/bin/sh", "-c"], "args": [script],
+    "env": [{"name": "DDL_SQL", "value": os.environ["DDL_SQL"]}, {"name": "CONNSTR", "secretRef": "connstr"}],
+    "resources": {"cpu": 0.25, "memory": "0.5Gi"}}]}}}
+open(sys.argv[1], "w").write(json.dumps(body))
+PY
+az rest --method patch --url "https://management.azure.com${JOB_ID}?api-version=2024-03-01" --body @"$PATCH" -o none
+sleep 5
 
 echo "==> 3/4 Ejecutando: $SQL"
 az containerapp job start -g "$RG" -n "$JOB" -o none

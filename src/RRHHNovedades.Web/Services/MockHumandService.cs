@@ -28,6 +28,9 @@ public class MockHumandService : IHumandService
             Status: "ACTIVE", FechaIngreso: new(2016, 8, 29), FechaNacimiento: new(1990, 8, 5), JefeId: "EMP-008", Sexo: "Femenino"),
         new("EMP-010", "Bruno",  "Acosta",    "+5491100000000", "Producción", "Turno C Noche", "9002",
             Status: "ACTIVE", FechaIngreso: new(2023, 11, 13), FechaNacimiento: new(2001, 9, 14), JefeId: "EMP-009", Sexo: "Masculino"),
+        // Bloqueado: RRHH le pone ⛔ al nombre en Humand. Nunca sale en el parte; oculto en la app salvo config.
+        new("EMP-011", "Cristian", "Felice ⛔", "+5491100000011", "Producción",
+            Status: "ACTIVE", FechaIngreso: new(2015, 5, 4), FechaNacimiento: new(1985, 3, 17), JefeId: "EMP-008", Sexo: "Masculino"),
     ];
 
     public Task<IReadOnlyList<EmpleadoHumand>> ObtenerEmpleadosAsync(CancellationToken ct = default) =>
@@ -87,6 +90,7 @@ public class MockHumandService : IHumandService
                 "EMP-008" => J(e.EmployeeInternalId, null, [], [], null, workday: false, schedule: false),  // Franco
                 "EMP-009" => J(e.EmployeeInternalId, new TimeOnly(22, 0), [], [], new TimeOnly(21, 58)),     // Presente (noche; salida cruza medianoche: 05:58)
                 "EMP-010" => J(e.EmployeeInternalId, new TimeOnly(22, 0), ["LATE"], [], new TimeOnly(22, 20)),// Tarde (turno noche)
+                "EMP-011" => J(e.EmployeeInternalId, t8, ["ABSENT"], [], null),                              // Ausente, pero BLOQUEADO: no va al parte
                 _ => J(e.EmployeeInternalId, t8, [], [], t8)
             });
         }
