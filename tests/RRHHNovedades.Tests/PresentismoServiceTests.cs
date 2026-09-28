@@ -61,12 +61,12 @@ public class PresentismoServiceTests
         await using var ctx = factory.CreateDbContext();
         ctx.Empleados.Add(new Empleado { Id = 1, Nombre = "Nadia", Apellido = "Molina", Area = "Producción", EmployeeInternalId = "1", Legajo = "871" });
 
-        NovedadDiaria Dia(int d, EstadoJornada e, string? motivo = null, bool feriado = false, TimeOnly? ent = null, TimeOnly? sal = null) =>
-            new() { EmpleadoId = 1, Fecha = new DateOnly(2026, 7, d), Estado = e, MotivoNovedad = motivo, EsFeriado = feriado, HoraEntrada = ent, HoraSalida = sal };
+        NovedadDiaria Dia(int d, EstadoJornada e, string? motivo = null, bool feriado = false, TimeOnly? ent = null, TimeOnly? sal = null, double refrig = 0) =>
+            new() { EmpleadoId = 1, Fecha = new DateOnly(2026, 7, d), Estado = e, MotivoNovedad = motivo, EsFeriado = feriado, HoraEntrada = ent, HoraSalida = sal, HorasRefrigerio = refrig };
 
         ctx.Novedades.AddRange(
-            Dia(1, EstadoJornada.Presente, ent: T(22), sal: T(6)),   // trabajado (nocturno: 8 hs)
-            Dia(2, EstadoJornada.Tarde, ent: T(8, 30), sal: T(17)),  // trabajado
+            Dia(1, EstadoJornada.Presente, ent: T(22), sal: T(6), refrig: 1.11),   // trabajado (nocturno: 8 hs)
+            Dia(2, EstadoJornada.Tarde, ent: T(8, 30), sal: T(17), refrig: 1.2),   // trabajado
             Dia(9, EstadoJornada.FrancoNoLaborable, feriado: true),  // feriado
             Dia(10, EstadoJornada.AusenteInjustificado),             // injustificada
             Dia(13, EstadoJornada.AusenteJustificado, "Vacaciones"),
@@ -94,6 +94,7 @@ public class PresentismoServiceTests
         Assert.Equal(2, fila.Licencias["Vacaciones"]);
         Assert.Equal(1, fila.Licencias["Lic. por enfermedad"]);
         Assert.Equal(8, fila.HorasNocturnas);                  // la noche del 1/7 (22→06)
+        Assert.Equal(2.3, fila.HorasRefrigerio);               // 1.11 + 1.2, redondeado a 1 decimal
         Assert.Equal("DESCONTAR", fila.Ppp);                   // tuvo 1 injustificada
         Assert.Equal(4, fila.TotalInasistencia);               // 1 injust + 2 vac + 1 enf
         Assert.Equal(30 - 1, fila.TotalLiquidados);            // base 30 − injustificada (justificadas se pagan)
@@ -129,15 +130,17 @@ public class PresentismoServiceTests
         using var ms = new MemoryStream(bytes);
         using var wb = new ClosedXML.Excel.XLWorkbook(ms);
         var ws = wb.Worksheet("07-2026");
-        // Columnas: 5 fijas + 2 tipos dinámicos (enfermedad, vacaciones) + 5 fijas = 12.
+        // Columnas: 5 fijas + 2 tipos dinámicos (enfermedad, vacaciones) + 6 fijas = 13.
         Assert.Equal("LEGAJOS", ws.Cell(1, 1).GetString());
         Assert.Equal("LIC. POR ENFERMEDAD", ws.Cell(1, 6).GetString());
         Assert.Equal("VACACIONES", ws.Cell(1, 7).GetString());
-        Assert.Equal("TOTAL DIAS LIQUIDADOS", ws.Cell(1, 12).GetString());
+        Assert.Equal("REFRIGERIO (HS)", ws.Cell(1, 9).GetString());
+        Assert.Equal("TOTAL DIAS LIQUIDADOS", ws.Cell(1, 13).GetString());
         Assert.Equal("871", ws.Cell(2, 1).GetString());
         Assert.Equal(25, ws.Cell(2, 3).GetValue<int>());       // trabajados = 30 − 1 feriado − 4 ausencias
         Assert.Equal(2, ws.Cell(2, 7).GetValue<int>());        // vacaciones
-        Assert.Equal("DESCONTAR", ws.Cell(2, 10).GetString()); // PPP
-        Assert.Equal(29, ws.Cell(2, 12).GetValue<int>());      // días liquidados = 30 − 1 injustificada
+        Assert.Equal(2.3, ws.Cell(2, 9).GetValue<double>());   // refrigerio 1.11 + 1.2
+        Assert.Equal("DESCONTAR", ws.Cell(2, 11).GetString()); // PPP
+        Assert.Equal(29, ws.Cell(2, 13).GetValue<int>());      // días liquidados = 30 − 1 injustificada
     }
 }

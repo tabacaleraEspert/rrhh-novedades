@@ -74,6 +74,7 @@
                 <MudTh Style="text-align:right;white-space:nowrap;" title="@t">@Abreviar(t)</MudTh>
             }
             <MudTh Style="text-align:right;">Hs noct.</MudTh>
+            <MudTh Style="text-align:right;" title="Horas de refrigerio del período (políticas de marcaje de Humand)">Refrig.</MudTh>
             <MudTh>PPP</MudTh>
             <MudTh Style="text-align:right;">Total inas.</MudTh>
             <MudTh Style="text-align:right;">Días liq.</MudTh>
@@ -91,6 +92,7 @@
                 <MudTd Style="text-align:right;">@Cero(context.Licencias.GetValueOrDefault(t))</MudTd>
             }
             <MudTd Style="text-align:right;">@Cero(context.HorasNocturnas)</MudTd>
+            <MudTd Style="text-align:right;">@(context.HorasRefrigerio > 0 ? context.HorasRefrigerio.ToString("0.#") : "—")</MudTd>
             <MudTd>
                 <MudChip T="string" Size="Size.Small" Color="@(context.Ppp == "Si" ? Color.Success : Color.Error)">@context.Ppp</MudChip>
             </MudTd>

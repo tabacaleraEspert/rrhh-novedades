@@ -154,6 +154,7 @@ public class IngestaService(
             nov.HoraSalida = j.HoraSalida;
             nov.MotivoNovedad = motivo;
             nov.EsManual = esManual;
+            nov.HorasRefrigerio = j.HorasRefrigerio;
             // Feriado: lo que marque Humand (hoy no cargan el calendario) + la lista de appsettings.
             nov.EsFeriado = j.EsFeriado || feriadosCfg.Contains(fecha);
             nov.ActualizadoUtc = DateTime.UtcNow;

@@ -221,6 +221,15 @@ public class HumandService : IHumandService
         bool esFeriado = it.TryGetProperty("holidays", out var hol)
             && hol.ValueKind == JsonValueKind.Array && hol.GetArrayLength() > 0;
 
+        // categorizedHours: horas por categoría de las políticas de marcaje (ej. "Refrigerio",
+        // "Horas extras al 50"). Hoy solo interesa el refrigerio.
+        double refrigerio = 0;
+        if (it.TryGetProperty("categorizedHours", out var chs) && chs.ValueKind == JsonValueKind.Array)
+            foreach (var ch in chs.EnumerateArray())
+                if (ch.TryGetProperty("category", out var cat) && cat.ValueKind == JsonValueKind.Object
+                    && Str(cat, "name")?.Contains("refrigerio", StringComparison.OrdinalIgnoreCase) == true)
+                    refrigerio += Numero(ch, "hours") ?? 0;
+
         return new JornadaHumand(
             Str(it, "employeeId") ?? string.Empty,
             ParseDate(Str(it, "referenceDate")) ?? fechaDefault,
@@ -230,7 +239,8 @@ public class HumandService : IHumandService
             permisos,
             entrada, salida, inicioTeorico,
             esFeriado,
-            permisosDiaCompleto);
+            permisosDiaCompleto,
+            HorasRefrigerio: refrigerio);
     }
 
     private async Task<string> GetAsync(string path, CancellationToken ct)

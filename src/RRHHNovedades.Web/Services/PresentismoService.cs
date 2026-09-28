@@ -16,6 +16,7 @@ public record PresentismoEmpleado(
     int Injustificadas,
     IReadOnlyDictionary<string, int> Licencias, // días por tipo de licencia de Humand (nombre normalizado)
     int HorasNocturnas,
+    double HorasRefrigerio, // suma del período (categoría "Refrigerio" de las políticas de marcaje)
     string Observacion,
     string Ppp,
     int TotalInasistencia,
@@ -122,6 +123,7 @@ public class PresentismoService(
             emp.Id, emp.Legajo, emp.ApellidoNombre, emp.Area,
             trabajados, feriados, injustificadas, lic,
             horasNocturnas,
+            Math.Round(dias.Sum(d => d.HorasRefrigerio), 1),
             string.Join("; ", obs),
             injustificadas > 0 ? "DESCONTAR" : "Si",
             totalInasistencia, totalLiquidados);
@@ -171,7 +173,7 @@ public class PresentismoService(
 
         var cab = new List<string> { "LEGAJOS", "NOMBRE Y APELLIDO", "CANT. DIAS TRABAJADOS", "FERIADOS", "INASISTENCIA INJUSTIFICADA" };
         cab.AddRange(tipos.Select(t => t.ToUpperInvariant()));
-        cab.AddRange(["HS NOCTURNAS", "OBSERVACION", "PPP", "TOTAL INASISTENCIA", "TOTAL DIAS LIQUIDADOS"]);
+        cab.AddRange(["HS NOCTURNAS", "REFRIGERIO (HS)", "OBSERVACION", "PPP", "TOTAL INASISTENCIA", "TOTAL DIAS LIQUIDADOS"]);
         for (int c = 0; c < cab.Count; c++) ws.Cell(1, c + 1).Value = cab[c];
         ws.Range(1, 1, 1, cab.Count).Style.Font.SetBold();
 
@@ -188,6 +190,8 @@ public class PresentismoService(
                 Num(ws.Cell(f, col++), x.Licencias.GetValueOrDefault(t));
             if (x.HorasNocturnas > 0) ws.Cell(f, col).Value = x.HorasNocturnas; else ws.Cell(f, col).Value = "-";
             col++;
+            if (x.HorasRefrigerio > 0) ws.Cell(f, col).Value = x.HorasRefrigerio; else ws.Cell(f, col).Value = "-";
+            col++;
             ws.Cell(f, col++).Value = x.Observacion;
             ws.Cell(f, col++).Value = x.Ppp;
             Num(ws.Cell(f, col++), x.TotalInasistencia);
@@ -197,7 +201,7 @@ public class PresentismoService(
         ws.Cell(f + 1, 2).Value = $"Período: {desde:dd/MM/yyyy} al {hasta.AddDays(-1):dd/MM/yyyy}" + (area is null ? "" : $" — {area}");
         ws.Cell(f + 1, 2).Style.Font.SetItalic();
         ws.Columns().AdjustToContents();
-        int obsCol = 5 + tipos.Count + 2;
+        int obsCol = 5 + tipos.Count + 3; // ... + hs nocturnas + refrigerio + observación
         ws.Column(obsCol).Width = Math.Min(ws.Column(obsCol).Width, 60);
 
         using var ms = new MemoryStream();

@@ -30,6 +30,12 @@ public class NovedadDiaria
     /// <summary>Justificada por una <see cref="LicenciaManual"/> (no por un permiso de Humand).</summary>
     public bool EsManual { get; set; }
 
+    /// <summary>
+    /// Horas de refrigerio del día según las políticas de marcaje de Humand (categoría
+    /// "Refrigerio" de categorizedHours del day-summary). 0 si no tuvo.
+    /// </summary>
+    public double HorasRefrigerio { get; set; }
+
     /// <summary>Última vez que se sincronizó/recalculó desde Humand.</summary>
     public DateTime ActualizadoUtc { get; set; }
 }

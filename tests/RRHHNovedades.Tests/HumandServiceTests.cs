@@ -191,6 +191,28 @@ public class HumandServiceTests
     }
 
     [Fact]
+    public async Task Jornadas_lee_horas_de_refrigerio_de_categorizedHours()
+    {
+        // Forma real (sep-2026): categorizedHours con categorías de las políticas de marcaje.
+        var dia = """
+            {
+              "employeeId": "E1", "referenceDate": "2026-09-25",
+              "isWorkday": true, "hasSchedule": true,
+              "timeSlots": [], "entries": [], "timeOffRequests": [], "incidences": [],
+              "categorizedHours": [
+                { "category": { "name": "Horas extras al 50" }, "hours": 4.11 },
+                { "category": { "name": "Refrigerio" }, "hours": 1.11 }
+              ]
+            }
+            """;
+        var svc = Crear(new FakeHandler((HttpStatusCode.OK, $$"""{ "count": 1, "items": [ {{dia}} ] }""")));
+
+        var j = (await svc.ObtenerJornadasAsync(["E1"], new DateOnly(2026, 9, 25))).Single();
+
+        Assert.Equal(1.11, j.HorasRefrigerio, 3); // solo la categoría Refrigerio, no las extras
+    }
+
+    [Fact]
     public async Task Reintenta_con_backoff_ante_429()
     {
         var ok = $$"""{ "count": 1, "users": [ {{UserJson("1")}} ] }""";

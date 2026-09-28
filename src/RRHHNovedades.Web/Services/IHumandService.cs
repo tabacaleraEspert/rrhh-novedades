@@ -32,7 +32,9 @@ public record JornadaHumand(
     // Subconjunto de PermisosDelDia con consumptionType = FULL_DAY: licencias de día completo.
     // Ganan aunque el empleado haya fichado (vino, se sintió mal y se fue). null = desconocido
     // (constructores viejos/tests) ⇒ se aplica la regla clásica (permiso solo si no fichó).
-    IReadOnlyList<string>? PermisosDiaCompleto = null);
+    IReadOnlyList<string>? PermisosDiaCompleto = null,
+    // Horas de la categoría "Refrigerio" de categorizedHours (políticas de marcaje de Humand).
+    double HorasRefrigerio = 0);
 
 /// <summary>Saldo de un empleado en una política de time-off (`/time-off/balances`).</summary>
 public record SaldoTimeOffHumand(
