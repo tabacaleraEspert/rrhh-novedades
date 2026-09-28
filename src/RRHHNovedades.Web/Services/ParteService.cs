@@ -45,10 +45,11 @@ public class ParteService(
     public async Task<ParteContenido> ArmarParteAsync(DateOnly fecha, Turno turno, CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
-        // Los empleados bloqueados (⛔ en Humand) NUNCA salen por WhatsApp, se muestren o no en la app.
+        // Los empleados bloqueados (⛔ en Humand) o dados de baja NUNCA salen por WhatsApp,
+        // se muestren o no en la app.
         var novedades = await db.Novedades.IgnoreQueryFilters()
             .Include(n => n.Empleado)
-            .Where(n => n.Fecha == fecha && n.Turno == turno && !n.Empleado.Bloqueado)
+            .Where(n => n.Fecha == fecha && n.Turno == turno && !n.Empleado.Bloqueado && n.Empleado.Activo)
             .ToListAsync(ct);
 
         int presentes = novedades.Count(n => n.Estado == EstadoJornada.Presente);

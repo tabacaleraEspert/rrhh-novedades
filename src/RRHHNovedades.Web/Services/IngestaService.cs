@@ -48,7 +48,9 @@ public class IngestaService(
             emp.Telefono = r.Telefono;
             emp.Area = r.Area;
             emp.Legajo = r.Legajo;
-            emp.Activo = true;
+            // Baja = status DEACTIVATED en Humand. Los inactivos no se sincronizan más y el
+            // filtro global del DbContext los oculta en toda la app.
+            emp.Activo = !EsBaja(r);
             // Bloqueado = RRHH le puso ⛔ al nombre en Humand. Se sigue sincronizando (para poder
             // mostrarlo si Configuración lo pide) pero nunca sale en el parte de WhatsApp.
             emp.Bloqueado = EsBloqueado(r);
@@ -61,6 +63,13 @@ public class IngestaService(
             else if (emp.Turno == Turno.Noche)
                 emp.Turno = Turno.Manana;
         }
+
+        // También es baja el que directamente desapareció de /users (borrado en Humand, no solo
+        // DEACTIVATED): si no se lo apaga acá, queda Activo para siempre (caso FELICE, sep-2026).
+        var idsRemotos = remotos.Select(r => r.EmployeeInternalId).ToHashSet();
+        foreach (var local in locales.Values.Where(e => e.Activo && !idsRemotos.Contains(e.EmployeeInternalId)))
+            local.Activo = false;
+
         await db.SaveChangesAsync(ct);
         logger.LogInformation("Ingesta: {Count} empleados sincronizados", remotos.Count);
         return remotos.Count;
@@ -176,6 +185,13 @@ public class IngestaService(
                     && j.InicioTeorico is { } inicio
                     && TimeOnly.FromDateTime(a.DateTime) < inicio));
 
+        // Licencia de DÍA COMPLETO ⇒ Justificado aunque haya fichado (caso real Bustamante
+        // 27-ago-2026: vino, se sintió mal, fichó 08:59-12:00 y se fue; la lic. por enfermedad
+        // se cargó después y debe ganar). Los permisos POR HORAS (salida anticipada, trámite)
+        // no pisan la fichada: el empleado trabajó.
+        if (j.PermisosDiaCompleto is { Count: > 0 })
+            return (EstadoJornada.AusenteJustificado, string.Join(", ", j.PermisosDiaCompleto), 0);
+
         // Permiso aprobado y no fichó ⇒ Justificado. Va ANTES que la regla de franco:
         // con permiso (vacaciones, etc.) Humand quita el horario del día (isWorkday/hasSchedule
         // = false) y NO marca ABSENT; el permiso viene embebido en timeOffRequests.
@@ -226,6 +242,10 @@ public class IngestaService(
         && fecha.DayOfWeek is not (DayOfWeek.Saturday or DayOfWeek.Sunday)
         && !j.EsFeriado
         && !feriadosCfg.Contains(fecha);
+
+    // internal para testearla (InternalsVisibleTo RRHHNovedades.Tests).
+    internal static bool EsBaja(EmpleadoHumand r) =>
+        string.Equals(r.Status, "DEACTIVATED", StringComparison.OrdinalIgnoreCase);
 
     // internal para testearla (InternalsVisibleTo RRHHNovedades.Tests).
     internal static bool EsBloqueado(EmpleadoHumand r) =>

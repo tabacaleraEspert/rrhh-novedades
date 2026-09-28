@@ -56,9 +56,10 @@
     protected override async Task OnInitializedAsync()
     {
         await using var db = await DbFactory.CreateDbContextAsync();
-        // El filtro global ya oculta a los bloqueados si Configuración lo pide; acá solo se cuenta cuántos quedaron afuera.
+        // El filtro global ya oculta a los bloqueados si Configuración lo pide (las bajas se
+        // ocultan siempre); acá solo se cuenta cuántos bloqueados vigentes quedaron afuera.
         _empleados = await db.Empleados.OrderBy(e => e.Apellido).ThenBy(e => e.Nombre).ToListAsync();
-        var totalBloqueados = await db.Empleados.IgnoreQueryFilters().CountAsync(e => e.Bloqueado);
+        var totalBloqueados = await db.Empleados.IgnoreQueryFilters().CountAsync(e => e.Bloqueado && e.Activo);
         _bloqueadosOcultos = totalBloqueados - _empleados.Count(e => e.Bloqueado);
         _loading = false;
     }

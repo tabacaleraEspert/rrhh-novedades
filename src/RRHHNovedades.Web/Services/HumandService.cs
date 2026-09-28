@@ -190,9 +190,16 @@ public class HumandService : IHumandService
     {
         var incidences = ReadStringArray(it, "incidences");
         var permisos = new List<string>();
+        var permisosDiaCompleto = new List<string>();
         if (it.TryGetProperty("timeOffRequests", out var tos) && tos.ValueKind == JsonValueKind.Array)
             foreach (var t in tos.EnumerateArray())
-                if (Str(t, "name") is { } n) permisos.Add(n);
+                if (Str(t, "name") is { } n)
+                {
+                    permisos.Add(n);
+                    // Solo un FULL_DAY explícito pisa la fichada; sin consumptionType (respuestas
+                    // viejas) se mantiene la regla clásica (permiso solo cuenta si no fichó).
+                    if (Str(t, "consumptionType") == "FULL_DAY") permisosDiaCompleto.Add(n);
+                }
 
         TimeOnly? entrada = null, salida = null;
         if (it.TryGetProperty("entries", out var entries) && entries.ValueKind == JsonValueKind.Array)
@@ -222,7 +229,8 @@ public class HumandService : IHumandService
             incidences,
             permisos,
             entrada, salida, inicioTeorico,
-            esFeriado);
+            esFeriado,
+            permisosDiaCompleto);
     }
 
     private async Task<string> GetAsync(string path, CancellationToken ct)

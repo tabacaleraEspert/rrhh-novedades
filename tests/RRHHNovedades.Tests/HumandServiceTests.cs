@@ -157,6 +157,37 @@ public class HumandServiceTests
         Assert.False(j.HasSchedule);
         Assert.Equal(["Vacaciones"], j.PermisosDelDia);
         Assert.Empty(j.Incidences);
+        // Sin consumptionType (respuesta vieja) NO se asume día completo: regla clásica.
+        Assert.Empty(j.PermisosDiaCompleto!);
+    }
+
+    [Fact]
+    public async Task Jornadas_distingue_permisos_FULL_DAY_de_los_por_horas()
+    {
+        // Forma real (ago/sep-2026): consumptionType a nivel del item de timeOffRequests.
+        var dia = """
+            {
+              "employeeId": "E1", "referenceDate": "2026-08-27",
+              "isWorkday": true, "hasSchedule": true,
+              "timeSlots": [ { "startTime": "09:00" } ],
+              "entries": [
+                { "type": "START", "time": "2026-08-27T08:59:00.000-03:00" },
+                { "type": "END",   "time": "2026-08-27T12:00:00.000-03:00" }
+              ],
+              "timeOffRequests": [
+                { "id": 1, "name": "Lic. por enfermedad ", "consumptionType": "FULL_DAY", "hours": 0 },
+                { "id": 2, "name": "Salidas anticipadas - HS", "consumptionType": "HOURS", "hours": 2.5 }
+              ],
+              "incidences": []
+            }
+            """;
+        var svc = Crear(new FakeHandler((HttpStatusCode.OK, $$"""{ "count": 1, "items": [ {{dia}} ] }""")));
+
+        var j = (await svc.ObtenerJornadasAsync(["E1"], new DateOnly(2026, 8, 27))).Single();
+
+        Assert.Equal(["Lic. por enfermedad ", "Salidas anticipadas - HS"], j.PermisosDelDia);
+        Assert.Equal(["Lic. por enfermedad "], j.PermisosDiaCompleto);
+        Assert.Equal(new TimeOnly(8, 59), j.HoraEntrada);
     }
 
     [Fact]

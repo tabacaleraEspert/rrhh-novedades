@@ -113,6 +113,8 @@
         <MudText Typo="Typo.h6">@_detNombre — @NombreMes(_mes) @_anio</MudText>
     </TitleContent>
     <DialogContent>
+        <MudSwitch T="bool" @bind-Value="_detMostrarCeros" Color="Color.Primary" Size="Size.Small" Class="mb-1"
+                   Label="Mostrar días en 0 (sin horas nocturnas)" />
         <MudSimpleTable Dense="true">
             <thead>
                 <tr>
@@ -121,12 +123,12 @@
                 </tr>
             </thead>
             <tbody>
-                @foreach (var d in _detNoches)
+                @foreach (var d in _detFilas)
                 {
-                    <tr>
+                    <tr style="@(d.Minutos == 0 ? "opacity:0.55;" : null)">
                         <td>@d.Fecha.ToString("ddd dd/MM")</td>
-                        <td style="text-align:center;">@d.Entrada.ToString("HH:mm")</td>
-                        <td style="text-align:center;">@d.Salida.ToString("HH:mm")</td>
+                        <td style="text-align:center;">@(d.Entrada?.ToString("HH:mm") ?? "—")</td>
+                        <td style="text-align:center;">@(d.Salida?.ToString("HH:mm") ?? "—")</td>
                         <td style="text-align:right;">@d.Minutos</td>
                         <td style="text-align:right;font-weight:600;">@d.Horas</td>
                     </tr>
@@ -134,7 +136,7 @@
             </tbody>
             <tfoot>
                 <tr style="border-top:2px solid var(--mud-palette-lines-default);">
-                    <td style="font-weight:600;">Total (@_detNoches.Count noches)</td>
+                    <td style="font-weight:600;">Total (@_detNoches.Count(x => x.Minutos > 0) noches)</td>
                     <td></td><td></td>
                     <td style="text-align:right;font-weight:600;">@_detNoches.Sum(x => x.Minutos)</td>
                     <td style="text-align:right;font-weight:600;">@_detNoches.Sum(x => x.Horas)</td>
@@ -143,6 +145,7 @@
         </MudSimpleTable>
         <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-2 d-block">
             Entrada y salida son las fichadas reales. Las horas se redondean por noche (≥ 45 min ⇒ hora completa).
+            Los días en 0 son jornadas sin horas en la banda 21:00–06:00 (trabajó de día, faltó o fue franco).
         </MudText>
     </DialogContent>
     <DialogActions>
@@ -169,10 +172,14 @@
         return nombre.ToLowerInvariant().Contains(q) || (area ?? "").ToLowerInvariant().Contains(q);
     }
 
-    // Detalle por empleado
+    // Detalle por empleado. Se trae el período completo (con días en 0) y el switch decide qué
+    // se ve: los ceros futuros no se muestran nunca (todavía no pasaron).
     private bool _detVisible;
+    private bool _detMostrarCeros;
     private string _detNombre = string.Empty;
     private IReadOnlyList<NocturnidadNoche> _detNoches = [];
+    private List<NocturnidadNoche> _detFilas =>
+        _detNoches.Where(d => d.Minutos > 0 || (_detMostrarCeros && d.Fecha <= Reloj.Hoy)).ToList();
     private readonly DialogOptions _dlgOpts = new() { MaxWidth = MaxWidth.Small, FullWidth = true, CloseOnEscapeKey = true };
 
     protected override async Task OnInitializedAsync()
@@ -209,7 +216,7 @@
     private async Task AbrirDetalle(NocturnidadEmpleado? f)
     {
         if (f is null) return;
-        _detNoches = await NocturnidadSrv.DetalleMensualAsync(f.EmpleadoId, _anio, _mes);
+        _detNoches = await NocturnidadSrv.DetalleMensualAsync(f.EmpleadoId, _anio, _mes, incluirDiasEnCero: true);
         _detNombre = f.ApellidoNombre;
         _detVisible = true;
     }

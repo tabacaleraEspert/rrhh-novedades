@@ -15,9 +15,49 @@ public class ClasificadorJornadaTests
     private static JornadaHumand Jornada(
         bool isWorkday = true, bool hasSchedule = true,
         string[]? incidences = null, string[]? permisos = null,
-        TimeOnly? entrada = null, TimeOnly? salida = null, TimeOnly? inicioTeorico = null) =>
+        TimeOnly? entrada = null, TimeOnly? salida = null, TimeOnly? inicioTeorico = null,
+        string[]? permisosDiaCompleto = null) =>
         new("EMP-1", Fecha, isWorkday, hasSchedule,
-            incidences ?? [], permisos ?? [], entrada, salida, inicioTeorico);
+            incidences ?? [], permisos ?? [], entrada, salida, inicioTeorico,
+            PermisosDiaCompleto: permisosDiaCompleto);
+
+    [Fact]
+    public void Caso_real_licencia_dia_completo_gana_aunque_haya_fichado()
+    {
+        // Caso Bustamante 27-ago-2026 (verificado en prod): vino, se sintió mal, fichó
+        // 08:59-12:00 y se fue; después se cargó la "Lic. por enfermedad" FULL_DAY.
+        // La licencia de día completo gana a la fichada ⇒ AusenteJustificado.
+        var (estado, motivo, min) = IngestaService.Clasificar(
+            Jornada(incidences: [], permisos: ["Lic. por enfermedad "],
+                entrada: new TimeOnly(8, 59), salida: new TimeOnly(12, 0), inicioTeorico: new TimeOnly(9, 0),
+                permisosDiaCompleto: ["Lic. por enfermedad "]));
+        Assert.Equal(EstadoJornada.AusenteJustificado, estado);
+        Assert.Equal("Lic. por enfermedad ", motivo);
+        Assert.Equal(0, min);
+    }
+
+    [Fact]
+    public void Caso_real_permiso_por_horas_con_fichada_sigue_Presente()
+    {
+        // Caso Ferreyra 15-sep-2026: "Salidas anticipadas - HS" (2,5 hs) y fichó 09:01-14:26.
+        // Un permiso POR HORAS no es ausencia: trabajó.
+        var (estado, _, _) = IngestaService.Clasificar(
+            Jornada(permisos: ["Salidas anticipadas - HS"],
+                entrada: new TimeOnly(9, 1), salida: new TimeOnly(14, 26), inicioTeorico: new TimeOnly(9, 0),
+                permisosDiaCompleto: []));
+        Assert.Equal(EstadoJornada.Presente, estado);
+    }
+
+    [Fact]
+    public void Licencia_dia_completo_gana_tambien_a_LATE()
+    {
+        var (estado, _, min) = IngestaService.Clasificar(
+            Jornada(incidences: ["LATE"], permisos: ["Lic. por enfermedad "],
+                entrada: new TimeOnly(9, 30), inicioTeorico: new TimeOnly(9, 0),
+                permisosDiaCompleto: ["Lic. por enfermedad "]));
+        Assert.Equal(EstadoJornada.AusenteJustificado, estado);
+        Assert.Equal(0, min);
+    }
 
     [Fact]
     public void Ficho_en_horario_es_Presente()

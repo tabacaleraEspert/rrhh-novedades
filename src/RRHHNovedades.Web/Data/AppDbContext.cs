@@ -5,9 +5,11 @@ namespace RRHHNovedades.Web.Data;
 
 /// <summary>
 /// Filtro global: los empleados bloqueados (⛔ en Humand) y sus novedades/licencias se ocultan de
-/// TODAS las consultas salvo que Configuración diga "mostrar". Los procesos que necesitan ver todo
-/// (ingesta, parte de WhatsApp, mantenimiento de licencias) usan <c>IgnoreQueryFilters()</c>.
-/// Sin <see cref="VisibilidadEmpleados"/> (tests) se muestra todo.
+/// TODAS las consultas salvo que Configuración diga "mostrar". Los dados de BAJA (DEACTIVATED o
+/// borrados de Humand ⇒ <c>Activo == false</c>) se ocultan SIEMPRE, sin configuración. Los procesos
+/// que necesitan ver todo (ingesta, parte de WhatsApp, mantenimiento de licencias) usan
+/// <c>IgnoreQueryFilters()</c>. Sin <see cref="VisibilidadEmpleados"/> (tests) los bloqueados se
+/// muestran; las bajas se ocultan igual.
 /// </summary>
 public class AppDbContext(DbContextOptions<AppDbContext> options, VisibilidadEmpleados? visibilidad = null)
     : DbContext(options)
@@ -46,7 +48,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, VisibilidadEmp
             e.Property(x => x.Telefono).HasMaxLength(40);
             e.Property(x => x.Area).HasMaxLength(120);
             e.Property(x => x.Legajo).HasMaxLength(20);
-            e.HasQueryFilter(x => MostrarBloqueados || !x.Bloqueado);
+            e.HasQueryFilter(x => x.Activo && (MostrarBloqueados || !x.Bloqueado));
         });
 
         modelBuilder.Entity<NovedadDiaria>(e =>
@@ -55,7 +57,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, VisibilidadEmp
             e.HasIndex(x => x.Fecha); // consultas por rango del asistente (antes: seq scan)
             e.Property(x => x.MotivoNovedad).HasMaxLength(200);
             e.HasOne(x => x.Empleado).WithMany().HasForeignKey(x => x.EmpleadoId);
-            e.HasQueryFilter(x => MostrarBloqueados || !x.Empleado.Bloqueado);
+            e.HasQueryFilter(x => x.Empleado.Activo && (MostrarBloqueados || !x.Empleado.Bloqueado));
         });
 
         modelBuilder.Entity<DestinatarioParte>(e =>
@@ -84,7 +86,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, VisibilidadEmp
             e.Property(x => x.Motivo).HasMaxLength(100);
             e.Property(x => x.CreadaPor).HasMaxLength(120);
             e.HasOne(x => x.Empleado).WithMany().HasForeignKey(x => x.EmpleadoId);
-            e.HasQueryFilter(x => MostrarBloqueados || !x.Empleado.Bloqueado);
+            e.HasQueryFilter(x => x.Empleado.Activo && (MostrarBloqueados || !x.Empleado.Bloqueado));
         });
 
         modelBuilder.Entity<AsistenteTurno>(e =>

@@ -185,6 +185,19 @@
             <ToolBarContent>
                 <MudTextField @bind-Value="_buscar" Placeholder="Buscar por nombre, legajo, área o motivo" Adornment="Adornment.Start"
                               AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Small" Class="mt-0 no-print" Immediate="true" />
+                <MudSelect T="string" Label="Estado" Value="_filtroEstado" ValueChanged="@((string? v) => _filtroEstado = v)"
+                           Clearable="true" Margin="Margin.Dense" Dense="true" Class="ml-4 no-print" Style="min-width:150px;max-width:180px;">
+                    <MudSelectItem T="string" Value="@("Justificada")">Justificada</MudSelectItem>
+                    <MudSelectItem T="string" Value="@("Injustificada")">Injustificada</MudSelectItem>
+                    <MudSelectItem T="string" Value="@("Programada")">Programada</MudSelectItem>
+                </MudSelect>
+                <MudSelect T="string" Label="Motivo" Value="_filtroMotivo" ValueChanged="@((string? v) => _filtroMotivo = v)"
+                           Clearable="true" Margin="Margin.Dense" Dense="true" Class="ml-4 no-print" Style="min-width:170px;max-width:220px;">
+                    @foreach (var m in MotivosDelReporte())
+                    {
+                        <MudSelectItem T="string" Value="@m">@m</MudSelectItem>
+                    }
+                </MudSelect>
             </ToolBarContent>
             <NoRecordsContent>
                 <MudText Class="pa-4">
@@ -193,12 +206,13 @@
                 </MudText>
             </NoRecordsContent>
             <HeaderContent>
-                <MudTh>Fecha</MudTh>
-                <MudTh>Legajo</MudTh>
-                <MudTh>Empleado</MudTh>
-                <MudTh>Área</MudTh>
-                <MudTh>Estado</MudTh>
-                <MudTh>Motivo</MudTh>
+                <MudTh><MudTableSortLabel T="AusentismoDetalle" InitialDirection="SortDirection.Ascending"
+                                          SortBy="@(d => d.Fecha)">Fecha</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel T="AusentismoDetalle" SortBy="@(d => OrdenLegajo(d.Legajo))">Legajo</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel T="AusentismoDetalle" SortBy="@(d => d.ApellidoNombre)">Empleado</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel T="AusentismoDetalle" SortBy="@(d => d.Area ?? "")">Área</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel T="AusentismoDetalle" SortBy="@(d => EstadoTexto(d))">Estado</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel T="AusentismoDetalle" SortBy="@(d => d.Motivo ?? "")">Motivo</MudTableSortLabel></MudTh>
             </HeaderContent>
             <RowTemplate>
                 <MudTd Style="white-space:nowrap;">@context.Fecha.ToString("ddd dd/MM/yyyy", EsAr)</MudTd>
@@ -208,7 +222,7 @@
                 <MudTd>
                     <MudChip T="string" Size="Size.Small"
                              Color="@(context.Justificada ? (context.Futura ? Color.Info : Color.Success) : Color.Warning)">
-                        @(context.Justificada ? (context.Futura ? "Programada" : "Justificada") : "Injustificada")
+                        @EstadoTexto(context)
                     </MudChip>
                 </MudTd>
                 <MudTd>@(context.Motivo ?? "—")</MudTd>
@@ -238,17 +252,34 @@ else if (_loading)
     private DateTime? _desdeDt => _desde.ToDateTime(TimeOnly.MinValue);
     private DateTime? _hastaDt => _hasta.ToDateTime(TimeOnly.MinValue);
 
+    private string? _filtroEstado;
+    private string? _filtroMotivo;
+
     private List<AusentismoDetalle> _detalleFiltrado =>
         _reporte is null ? [] : _reporte.Detalle.Where(PasaBusqueda).ToList();
 
+    private static string EstadoTexto(AusentismoDetalle d) =>
+        d.Justificada ? (d.Futura ? "Programada" : "Justificada") : "Injustificada";
+
+    // Legajo numérico ordena como número ("9" antes que "845"); el resto, al final alfabético.
+    private static string OrdenLegajo(string? legajo) =>
+        int.TryParse(legajo, out var n) ? n.ToString("D10") : legajo ?? "￿";
+
+    private IEnumerable<string> MotivosDelReporte() =>
+        _reporte is null ? [] : _reporte.Detalle.Where(d => d.Motivo is not null)
+            .Select(d => d.Motivo!).Distinct().OrderBy(m => m);
+
     private bool PasaBusqueda(AusentismoDetalle d)
     {
+        if (_filtroEstado is not null && EstadoTexto(d) != _filtroEstado) return false;
+        if (_filtroMotivo is not null && d.Motivo != _filtroMotivo) return false;
         if (string.IsNullOrWhiteSpace(_buscar)) return true;
         var q = _buscar.Trim().ToLowerInvariant();
         return d.ApellidoNombre.ToLowerInvariant().Contains(q)
             || (d.Legajo ?? "").ToLowerInvariant().Contains(q)
             || (d.Area ?? "").ToLowerInvariant().Contains(q)
-            || (d.Motivo ?? "").ToLowerInvariant().Contains(q);
+            || (d.Motivo ?? "").ToLowerInvariant().Contains(q)
+            || d.Fecha.ToString("dd/MM/yyyy").Contains(q);
     }
 
     protected override async Task OnInitializedAsync()

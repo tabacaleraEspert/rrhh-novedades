@@ -190,4 +190,31 @@ public class NocturnidadServiceTests
         Assert.Equal(new DateOnly(2026, 7, 2), noches[2].Fecha);
         Assert.Equal(9, noches[2].Horas);
     }
+
+    [Fact]
+    public async Task Detalle_con_dias_en_cero_cubre_todo_el_periodo()
+    {
+        var svc = await SetupMesAsync(nameof(Detalle_con_dias_en_cero_cubre_todo_el_periodo));
+        var dias = await svc.DetalleMensualAsync(1, 2026, 7, incluirDiasEnCero: true);
+
+        Assert.Equal(30, dias.Count); // 26-jun → 25-jul inclusive, un registro por día
+        Assert.Equal(new DateOnly(2026, 6, 26), dias[0].Fecha);
+        Assert.Equal(new DateOnly(2026, 7, 25), dias[^1].Fecha);
+
+        // Día sin fichada: 0 y sin horarios.
+        var sinFichada = dias.Single(d => d.Fecha == new DateOnly(2026, 6, 27));
+        Assert.Equal(0, sinFichada.Minutos);
+        Assert.Null(sinFichada.Entrada);
+        Assert.Null(sinFichada.Salida);
+
+        // Fichó pero sin salida: se muestra la entrada, no computa minutos.
+        var sinSalida = dias.Single(d => d.Fecha == new DateOnly(2026, 7, 3));
+        Assert.Equal(new TimeOnly(22, 0), sinSalida.Entrada);
+        Assert.Null(sinSalida.Salida);
+        Assert.Equal(0, sinSalida.Minutos);
+
+        // Las noches con horas quedan idénticas al detalle clásico.
+        Assert.Equal(8, dias.Single(d => d.Fecha == new DateOnly(2026, 7, 1)).Horas);
+        Assert.Equal(3, dias.Count(d => d.Minutos > 0));
+    }
 }

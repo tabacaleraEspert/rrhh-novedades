@@ -81,7 +81,7 @@
             <MudText Typo="Typo.subtitle1" Class="mb-2" Style="font-weight:600;">Empleados bloqueados</MudText>
             <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-2">
                 Son los que en Humand tienen el símbolo <b>⛔</b> en el nombre. <b>Nunca salen en el parte de WhatsApp.</b>
-                Acá se define si se muestran o se ocultan en el resto del sistema (dashboard, planillas, listados y asistente).
+                Acá se define si se muestran o se ocultan en el resto del sistema (dashboard, planillas, listados y asistente). Los empleados <b>dados de baja</b> en Humand se ocultan siempre, sin configuración.
             </MudText>
             <MudSwitch T="bool" Value="_mostrarBloqueados" ValueChanged="GuardarMostrarBloqueados" Color="Color.Primary"
                        Label="@(_mostrarBloqueados ? "Se muestran en el sistema" : "Ocultos en el sistema")" />
@@ -228,7 +228,7 @@
             _horaManana = cfg.HoraParteManana; _horaTarde = cfg.HoraParteTarde; _horaNoche = cfg.HoraParteNoche;
             _mostrarBloqueados = cfg.MostrarBloqueados;
         }
-        _cantBloqueados = await db.Empleados.IgnoreQueryFilters().CountAsync(e => e.Bloqueado);
+        _cantBloqueados = await db.Empleados.IgnoreQueryFilters().CountAsync(e => e.Bloqueado && e.Activo); // las bajas no cuentan: se ocultan siempre
     }
 
     // ---- Empleados bloqueados ----

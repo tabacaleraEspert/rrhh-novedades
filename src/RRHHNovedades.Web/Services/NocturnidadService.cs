@@ -13,11 +13,11 @@ public record NocturnidadEmpleado(
     int Noches,
     int HorasNocturnas);
 
-/// <summary>Una noche puntual del desglose por empleado.</summary>
+/// <summary>Una noche puntual del desglose por empleado. Entrada/Salida null = sin fichada ese día.</summary>
 public record NocturnidadNoche(
     DateOnly Fecha,
-    TimeOnly Entrada,
-    TimeOnly Salida,
+    TimeOnly? Entrada,
+    TimeOnly? Salida,
     int Minutos,
     int Horas);
 
@@ -29,8 +29,12 @@ public interface INocturnidadService
     /// </summary>
     Task<IReadOnlyList<NocturnidadEmpleado>> ReporteMensualAsync(int anio, int mes, CancellationToken ct = default);
 
-    /// <summary>Desglose noche por noche de un empleado en el mes de liquidación (solo noches con minutos > 0).</summary>
-    Task<IReadOnlyList<NocturnidadNoche>> DetalleMensualAsync(int empleadoId, int anio, int mes, CancellationToken ct = default);
+    /// <summary>
+    /// Desglose noche por noche de un empleado en el mes de liquidación. Por defecto solo noches
+    /// con minutos > 0; con <paramref name="incluirDiasEnCero"/> devuelve TODOS los días del
+    /// período (los sin nocturnidad van con 0; sin fichada, Entrada/Salida null).
+    /// </summary>
+    Task<IReadOnlyList<NocturnidadNoche>> DetalleMensualAsync(int empleadoId, int anio, int mes, bool incluirDiasEnCero = false, CancellationToken ct = default);
 
     /// <summary>
     /// Planilla Excel (.xlsx) del período: hoja "Resumen" (acumulado por empleado) y hoja
@@ -85,24 +89,34 @@ public class NocturnidadService(IDbContextFactory<AppDbContext> dbFactory) : INo
             .ToList();
     }
 
-    public async Task<IReadOnlyList<NocturnidadNoche>> DetalleMensualAsync(int empleadoId, int anio, int mes, CancellationToken ct = default)
+    public async Task<IReadOnlyList<NocturnidadNoche>> DetalleMensualAsync(int empleadoId, int anio, int mes, bool incluirDiasEnCero = false, CancellationToken ct = default)
     {
         var (desde, hasta) = PeriodoLiquidacion(anio, mes);
 
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var novedades = await db.Novedades
             .Where(n => n.EmpleadoId == empleadoId && n.Fecha >= desde && n.Fecha < hasta
-                     && n.HoraEntrada != null && n.HoraSalida != null)
+                     && n.HoraEntrada != null)
             .OrderBy(n => n.Fecha)
             .ToListAsync(ct);
 
-        return novedades
+        var noches = novedades
             .Select(n => new NocturnidadNoche(
-                n.Fecha, n.HoraEntrada!.Value, n.HoraSalida!.Value,
+                n.Fecha, n.HoraEntrada, n.HoraSalida,
                 Minutos: MinutosNocturnos(n.HoraEntrada!.Value, n.HoraSalida),
                 Horas: HorasRedondeadas(MinutosNocturnos(n.HoraEntrada!.Value, n.HoraSalida))))
-            .Where(x => x.Minutos > 0)
             .ToList();
+
+        if (!incluirDiasEnCero)
+            return noches.Where(x => x.Minutos > 0).ToList();
+
+        // Período completo, día por día: los días sin nocturnidad salen en 0 (con la fichada
+        // si la hubo — ej. trabajó de día — o sin nada si ni vino).
+        var porFecha = noches.ToDictionary(x => x.Fecha);
+        var res = new List<NocturnidadNoche>();
+        for (var f = desde; f < hasta; f = f.AddDays(1))
+            res.Add(porFecha.TryGetValue(f, out var x) ? x : new NocturnidadNoche(f, null, null, 0, 0));
+        return res;
     }
 
     public async Task<byte[]> ExcelMensualAsync(int anio, int mes, string? area = null, CancellationToken ct = default)

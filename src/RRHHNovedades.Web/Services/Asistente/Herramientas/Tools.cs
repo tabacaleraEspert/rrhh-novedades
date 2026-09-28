@@ -230,7 +230,7 @@ public sealed class NocturnidadTool(INocturnidadService nocturnidad) : IAsistent
         if (mes is < 1 or > 12) throw new ArgumentException("mes debe estar entre 1 y 12.");
 
         if (Args.EnteroOpcional(args, "empleadoId") is int empleadoId)
-            return Compactador.Lista(await nocturnidad.DetalleMensualAsync(empleadoId, anio, mes, ct));
+            return Compactador.Lista(await nocturnidad.DetalleMensualAsync(empleadoId, anio, mes, ct: ct));
         return Compactador.Lista(await nocturnidad.ReporteMensualAsync(anio, mes, ct));
     }
 }
