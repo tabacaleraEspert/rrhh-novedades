@@ -16,6 +16,28 @@ namespace RRHHNovedades.Web.Extensions;
 
 public static class EndpointExtensions
 {
+    /// <summary>
+    /// Login único: con Sso:CommandCenterUrl, GET /login redirige al Command Center. No redirige si
+    /// viene de cerrar sesión (?salio=1: el CC sigue logueado y lo volvería a entrar solo) ni de un
+    /// SSO fallido (?error=...: evita el rebote app ↔ CC); ahí Login.razor muestra el botón Ingresar.
+    /// </summary>
+    public static WebApplication UseLoginPorCommandCenter(this WebApplication app)
+    {
+        app.Use(async (ctx, next) =>
+        {
+            var sso = ctx.RequestServices.GetRequiredService<IOptions<SsoOptions>>().Value;
+            if (sso.LoginPorCommandCenter && HttpMethods.IsGet(ctx.Request.Method)
+                && ctx.Request.Path.Equals("/login", StringComparison.OrdinalIgnoreCase)
+                && !ctx.Request.Query.ContainsKey("salio") && !ctx.Request.Query.ContainsKey("error"))
+            {
+                ctx.Response.Redirect(sso.UrlIngresoCommandCenter);
+                return;
+            }
+            await next();
+        });
+        return app;
+    }
+
     public static WebApplication MapAppEndpoints(this WebApplication app)
     {
         app.MapAuthEndpoints();
@@ -27,8 +49,12 @@ public static class EndpointExtensions
     private static void MapAuthEndpoints(this WebApplication app)
     {
         app.MapPost("/api/auth/login", async (HttpContext ctx, IDbContextFactory<AppDbContext> dbFactory,
-            IMemoryCache cache, IConfiguration config) =>
+            IMemoryCache cache, IConfiguration config, IOptions<SsoOptions> ssoOptions) =>
         {
+            // Login único: sin login propio (ni su PIN maestro); se entra solo por el Command Center.
+            if (ssoOptions.Value.LoginPorCommandCenter)
+                return Results.Redirect(ssoOptions.Value.UrlIngresoCommandCenter);
+
             var form = await ctx.Request.ReadFormAsync();
             var email = form["email"].ToString().Trim().ToLowerInvariant();
             var pin = form["pin"].ToString();
@@ -71,7 +97,7 @@ public static class EndpointExtensions
         app.MapGet("/api/auth/logout", async (HttpContext ctx) =>
         {
             await ctx.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
-            return Results.Redirect("/login");
+            return Results.Redirect("/login?salio=1");
         });
 
         // Autologin (SSO) desde el Command Center: ticket JWT de un solo uso (ver SsoTicketService).

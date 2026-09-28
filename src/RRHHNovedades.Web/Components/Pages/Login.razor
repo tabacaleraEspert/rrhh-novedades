@@ -1,6 +1,7 @@
 @page "/login"
 @layout EmptyLayout
 @inject NavigationManager Nav
+@inject Microsoft.Extensions.Options.IOptions<RRHHNovedades.Web.Options.SsoOptions> SsoOptions
 
 <PageTitle>Iniciar sesión - Novedades RRHH</PageTitle>
 
@@ -14,6 +15,17 @@
         {
             <p class="login-error">@_mensajeError</p>
         }
+        @if (SsoOptions.Value.LoginPorCommandCenter)
+        {
+            @* Login único: sin formulario propio; se entra con DNI y PIN de Espert en el Command Center. *@
+            @if (_mensajeError is null)
+            {
+                <p class="login-info">@(_salio ? "Cerraste sesión." : "Ingresá con tu DNI y PIN de Espert.")</p>
+            }
+            <a class="login-btn-cc" href="@SsoOptions.Value.UrlIngresoCommandCenter">Ingresar</a>
+        }
+        else
+        {
         <form method="post" action="/api/auth/login">
             <label for="email">Email</label>
             <input type="email" id="email" name="email" required autofocus placeholder="usuario@tabacaleraespert.com" />
@@ -22,21 +34,26 @@
                    maxlength="10" placeholder="••••" autocomplete="off" />
             <button type="submit">Ingresar</button>
         </form>
+        }
     </div>
 </div>
 
 @code {
     private string? _mensajeError;
+    private bool _salio;
 
     protected override void OnInitialized()
     {
         var uri = Nav.ToAbsoluteUri(Nav.Uri);
         var q = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(uri.Query);
+        _salio = q.ContainsKey("salio");
         if (q.TryGetValue("error", out var e))
             _mensajeError = e == "locked"
                 ? "Demasiados intentos. Esperá unos minutos e intentá de nuevo."
                 : e == "sso"
-                    ? "No pudimos validar el acceso desde el Command Center. Ingresá con tu email y PIN."
+                    ? (SsoOptions.Value.LoginPorCommandCenter
+                        ? "Tu usuario no tiene acceso a Novedades RRHH. Si lo necesitás, pedíselo a RRHH."
+                        : "No pudimos validar el acceso desde el Command Center. Ingresá con tu email y PIN.")
                     : "Email o PIN inválido.";
     }
 }

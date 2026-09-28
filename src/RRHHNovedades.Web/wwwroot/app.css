@@ -101,6 +101,32 @@ h1:focus {
     background: #C4A866;
 }
 
+/* Login único: botón que lleva al Command Center (mismo aspecto que el submit). */
+.login-card .login-btn-cc {
+    display: block;
+    width: 100%;
+    padding: 0.75rem;
+    background: #A48242;
+    border-radius: 6px;
+    color: #FFFFFF;
+    font-size: 1rem;
+    font-weight: 600;
+    text-align: center;
+    text-decoration: none;
+    transition: background 0.2s;
+}
+
+.login-card .login-btn-cc:hover {
+    background: #C4A866;
+}
+
+.login-info {
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 0.9rem;
+    text-align: center;
+    margin-bottom: 1rem;
+}
+
 .login-error {
     color: #E11D48;
     font-size: 0.85rem;
