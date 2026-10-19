@@ -94,6 +94,30 @@ public static class EndpointExtensions
             return Results.Redirect("/");
         });
 
+        // Link "Sueldos" del menú: a Sueldos RRHH se entra solo desde acá, ya logueado con el usuario
+        // de esta sesión (ticket propio, ver TicketSalidaSso). Sin secreto o sin DNI, abre Sueldos tal cual.
+        app.MapGet("/ir/sueldos", async (HttpContext ctx, IDbContextFactory<AppDbContext> dbFactory,
+            IOptions<FeaturesOptions> features, IOptions<SsoOptions> sso, ILoggerFactory logs, CancellationToken ct) =>
+        {
+            var url = features.Value.SueldosUrl.TrimEnd('/');
+            if (string.IsNullOrWhiteSpace(url)) return Results.NotFound();
+            if (string.IsNullOrWhiteSpace(sso.Value.SueldosSecret)
+                || !int.TryParse(ctx.User.FindFirstValue("UserId"), out var userId))
+                return Results.Redirect(url);
+
+            await using var db = await dbFactory.CreateDbContextAsync(ct);
+            var dni = await db.Usuarios.Where(u => u.Id == userId && u.Activo)
+                .Select(u => u.Dni).FirstOrDefaultAsync(ct);
+            if (string.IsNullOrWhiteSpace(dni))
+            {
+                logs.CreateLogger("IrSueldos").LogWarning("Usuario {UserId} sin DNI cargado: no se puede entrar a Sueldos", userId);
+                return Results.Redirect(url);
+            }
+            var ticket = TicketSalidaSso.Crear(sso.Value.SueldosSecret, "sueldos-rrhh", dni.Trim(), DateTime.UtcNow);
+            // El ticket va en el fragment: no llega a servidores ni logs intermedios.
+            return Results.Redirect($"{url}/sso#ticket={ticket}");
+        }).RequireAuthorization(p => p.RequireRole(Roles.Admin, Roles.RRHH));
+
         app.MapGet("/api/auth/logout", async (HttpContext ctx) =>
         {
             await ctx.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);

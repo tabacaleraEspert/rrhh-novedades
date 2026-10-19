@@ -28,6 +28,13 @@ public class SsoOptions
     /// </summary>
     public string CommandCenterUrl { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Secreto HS256 compartido SOLO con Sueldos RRHH (= sso-secret de kv-sueldos-rrhh-prod; acá Key
+    /// Vault Sso--SueldosSecret). A Sueldos se entra únicamente desde el link del menú, ya logueado.
+    /// Vacío = el link abre Sueldos sin ticket.
+    /// </summary>
+    public string SueldosSecret { get; set; } = string.Empty;
+
     public bool LoginPorCommandCenter => !string.IsNullOrWhiteSpace(CommandCenterUrl);
 
     /// <summary>Adónde mandar el browser para entrar: el CC con el pedido de ticket para esta app.</summary>
