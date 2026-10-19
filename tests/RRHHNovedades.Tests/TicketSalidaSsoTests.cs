@@ -28,12 +28,14 @@ public class TicketSalidaSsoTests
     public async Task Cumple_el_contrato_de_Sueldos()
     {
         var ahora = DateTime.UtcNow;
-        var r = await Validar(TicketSalidaSso.Crear(Secret, "sueldos-rrhh", "41700043", ahora));
+        var r = await Validar(TicketSalidaSso.Crear(Secret, "sueldos-rrhh", "41700043", ahora, nombre: "Davor", rol: "Admin"));
         Assert.True(r.IsValid);
         var t = (JsonWebToken)r.SecurityToken;
         Assert.Equal("41700043", t.GetClaim("dni").Value);
         Assert.Matches("^[0-9a-f]{32}$", t.GetClaim("jti").Value);
         Assert.Equal("/", t.GetClaim("next").Value);
+        Assert.Equal("Davor", t.GetClaim("nombre").Value);
+        Assert.Equal("Admin", t.GetClaim("rol").Value);
         Assert.Equal("HS256", t.Alg);
         Assert.Equal(TicketSalidaSso.VidaSegundos, (t.ValidTo - t.IssuedAt).TotalSeconds);
     }

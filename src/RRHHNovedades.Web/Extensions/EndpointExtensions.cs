@@ -106,14 +106,16 @@ public static class EndpointExtensions
                 return Results.Redirect(url);
 
             await using var db = await dbFactory.CreateDbContextAsync(ct);
-            var dni = await db.Usuarios.Where(u => u.Id == userId && u.Activo)
-                .Select(u => u.Dni).FirstOrDefaultAsync(ct);
+            var u = await db.Usuarios.Where(u => u.Id == userId && u.Activo)
+                .Select(u => new { u.Dni, u.Nombre, u.Rol }).FirstOrDefaultAsync(ct);
+            var dni = u?.Dni;
             if (string.IsNullOrWhiteSpace(dni))
             {
                 logs.CreateLogger("IrSueldos").LogWarning("Usuario {UserId} sin DNI cargado: no se puede entrar a Sueldos", userId);
                 return Results.Redirect(url);
             }
-            var ticket = TicketSalidaSso.Crear(sso.Value.SueldosSecret, "sueldos-rrhh", dni.Trim(), DateTime.UtcNow);
+            var ticket = TicketSalidaSso.Crear(sso.Value.SueldosSecret, "sueldos-rrhh", dni.Trim(), DateTime.UtcNow,
+                nombre: u!.Nombre, rol: u.Rol);
             // El ticket va en el fragment: no llega a servidores ni logs intermedios.
             return Results.Redirect($"{url}/sso#ticket={ticket}");
         }).RequireAuthorization(p => p.RequireRole(Roles.Admin, Roles.RRHH));
