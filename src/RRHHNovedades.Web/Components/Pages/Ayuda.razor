@@ -197,6 +197,18 @@
 
     <MudExpansionPanel>
         <TitleContent>
+            <div class="d-flex align-center gap-2"><MudIcon Icon="@Icons.Material.Filled.Payments" Color="Color.Primary" /><MudText Style="font-weight:600;">Sueldos</MudText></div>
+        </TitleContent>
+        <ChildContent>
+            <MudList T="string" Dense="true">
+                <MudListItem T="string" Icon="@Icons.Material.Filled.OpenInNew">El botón <b>Sueldos</b> del menú (solo RRHH y Admin) abre en una <b>pestaña nueva</b> el sistema de Sueldos: novedades del mes, autorización y pago.</MudListItem>
+                <MudListItem T="string" Icon="@Icons.Material.Filled.Login">Es otro sistema: si ya entraste por el <b>Command Center</b>, te abre la sesión solo. Para poder entrar, tu <b>DNI</b> tiene que estar dado de alta como usuario en Sueldos (pedirlo a Sistemas).</MudListItem>
+            </MudList>
+        </ChildContent>
+    </MudExpansionPanel>
+
+    <MudExpansionPanel>
+        <TitleContent>
             <div class="d-flex align-center gap-2"><MudIcon Icon="@Icons.Material.Filled.Schedule" Color="Color.Primary" /><MudText Style="font-weight:600;">¿Cuándo se actualizan los datos?</MudText></div>
         </TitleContent>
         <ChildContent>
@@ -275,5 +287,5 @@
 
 @code {
     // Actualizar esta fecha cada vez que se modifique el manual (ver CLAUDE.md → "Manual de uso").
-    private const string UltimaActualizacion = "28/09/2026";
+    private const string UltimaActualizacion = "19/10/2026";
 }

@@ -14,6 +14,12 @@ public class FeaturesOptions
     public bool Vacaciones { get; set; } = true;
     public bool Demografia { get; set; } = true;
 
+    /// <summary>
+    /// URL de Sueldos RRHH (sueldos-rrhh). Aparece en el menú (Admin/RRHH) y abre en pestaña nueva;
+    /// el login lo resuelve Sueldos con el Command Center. Vacía = el ítem no aparece.
+    /// </summary>
+    public string SueldosUrl { get; set; } = string.Empty;
+
     /// <summary>Saldo de vacaciones (días) a partir del cual se marca advertencia (naranja).</summary>
     public int SaldoVacacionesAdvertencia { get; set; } = 21;
 

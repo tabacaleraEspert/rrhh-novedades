@@ -52,6 +52,16 @@
         <MudDivider Class="my-1" />
     }
 
+    @if (!string.IsNullOrWhiteSpace(Features.Value.SueldosUrl))
+    {
+        <AuthorizeView Roles="Admin,RRHH">
+            <MudNavLink Href="@Features.Value.SueldosUrl" Target="_blank" Icon="@Icons.Material.Filled.Payments">
+                Sueldos <MudIcon Icon="@Icons.Material.Filled.OpenInNew" Size="Size.Small" Class="ml-1" Style="vertical-align:middle;opacity:.6;" />
+            </MudNavLink>
+            <MudDivider Class="my-1" />
+        </AuthorizeView>
+    }
+
     <AuthorizeView Roles="Admin,RRHH">
         <MudNavLink Href="/configuracion" Icon="@Icons.Material.Filled.Settings">
             Configuración
