@@ -201,6 +201,8 @@ public class HumandServiceTests
               "timeSlots": [], "entries": [], "timeOffRequests": [], "incidences": [],
               "categorizedHours": [
                 { "category": { "name": "Horas extras al 50" }, "hours": 4.11 },
+                { "category": { "name": "Horas extras al 100" }, "hours": 1.5 },
+                { "category": { "name": "Horas nocturnas" }, "hours": 8.04 },
                 { "category": { "name": "Refrigerio" }, "hours": 1.11 }
               ]
             }
@@ -210,6 +212,39 @@ public class HumandServiceTests
         var j = (await svc.ObtenerJornadasAsync(["E1"], new DateOnly(2026, 9, 25))).Single();
 
         Assert.Equal(1.11, j.HorasRefrigerio, 3); // solo la categoría Refrigerio, no las extras
+        Assert.Equal(4.11, j.HorasExtras50, 3);   // las 4 categorías reales de Espert (oct-2026)
+        Assert.Equal(1.5, j.HorasExtras100, 3);   // "Horas nocturnas" se ignora (Nocturnidad calcula con fichadas)
+    }
+
+    [Fact]
+    public async Task Jornadas_sin_categorizedHours_dejan_horas_en_cero()
+    {
+        var dia = """
+            { "employeeId": "E1", "referenceDate": "2026-09-25", "isWorkday": true, "hasSchedule": true,
+              "timeSlots": [], "entries": [], "timeOffRequests": [], "incidences": [] }
+            """;
+        var svc = Crear(new FakeHandler((HttpStatusCode.OK, $$"""{ "count": 1, "items": [ {{dia}} ] }""")));
+
+        var j = (await svc.ObtenerJornadasAsync(["E1"], new DateOnly(2026, 9, 25))).Single();
+
+        Assert.Equal(0, j.HorasRefrigerio);
+        Assert.Equal(0, j.HorasExtras50);
+        Assert.Equal(0, j.HorasExtras100);
+    }
+
+    [Theory]
+    [InlineData("Horas extras al 50", HumandService.CategoriaHoras.Extras50)]
+    [InlineData("Horas extras al 50%", HumandService.CategoriaHoras.Extras50)]
+    [InlineData("Horas extras al 100", HumandService.CategoriaHoras.Extras100)]
+    [InlineData("HORAS EXTRA 100%", HumandService.CategoriaHoras.Extras100)]
+    [InlineData("Refrigerio", HumandService.CategoriaHoras.Refrigerio)]
+    [InlineData("Horas nocturnas", HumandService.CategoriaHoras.Otra)]
+    [InlineData("REGULAR", HumandService.CategoriaHoras.Otra)]
+    [InlineData("EXTRA", HumandService.CategoriaHoras.Otra)]   // el enum genérico del OpenAPI, sin porcentaje: no se sabe a cuál va
+    [InlineData(null, HumandService.CategoriaHoras.Otra)]
+    public void Categoria_de_horas_se_reconoce_por_contenido_del_nombre(string? nombre, HumandService.CategoriaHoras esperado)
+    {
+        Assert.Equal(esperado, HumandService.TipoCategoriaHoras(nombre));
     }
 
     [Fact]

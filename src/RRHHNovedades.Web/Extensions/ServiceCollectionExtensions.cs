@@ -46,6 +46,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ISsoTicketService, SsoTicketService>();
         // Secciones nuevas del mega tablero (ago-2026), apagables vía Features:*
         services.AddScoped<ITardanzasService, TardanzasService>();
+        services.AddScoped<IHorasExtrasService, HorasExtrasService>();
         services.AddScoped<IVacacionesService, VacacionesService>();
         services.AddScoped<IDemografiaService, DemografiaService>();
         services.AddMemoryCache();
@@ -61,6 +62,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IAsistenteTool, LicenciasTool>();
         services.AddScoped<IAsistenteTool, PresentismoTool>();
         services.AddScoped<IAsistenteTool, NocturnidadTool>();
+        services.AddScoped<IAsistenteTool, HorasExtrasTool>();
         services.AddScoped<IAsistenteTool, ResumenDiaTool>();
         services.AddScoped<IAsistenteTool, CoberturaDatosTool>();
         services.AddScoped<AsistenteToolRegistry>();

@@ -5,7 +5,7 @@ using RRHHNovedades.Web.Models;
 
 namespace RRHHNovedades.Web.Services.Asistente.Herramientas;
 
-// Las 9 herramientas del asistente. Todas reutilizan los servicios del tablero (los números
+// Las 10 herramientas del asistente. Todas reutilizan los servicios del tablero (los números
 // del chat tienen que coincidir con los de la pantalla — ese es el punto) y devuelven JSON
 // compactado. Fechas de entrada: yyyy-MM-dd (se le indica al modelo en cada schema).
 
@@ -232,6 +232,36 @@ public sealed class NocturnidadTool(INocturnidadService nocturnidad) : IAsistent
         if (Args.EnteroOpcional(args, "empleadoId") is int empleadoId)
             return Compactador.Lista(await nocturnidad.DetalleMensualAsync(empleadoId, anio, mes, ct: ct));
         return Compactador.Lista(await nocturnidad.ReporteMensualAsync(anio, mes, ct));
+    }
+}
+
+/// <summary>Horas extra (50/100) y refrigerio del período de liquidación, según políticas de Humand.</summary>
+public sealed class HorasExtrasTool(IHorasExtrasService horasExtras) : IAsistenteTool
+{
+    public string Nombre => "get_horas_extras";
+    public string Descripcion =>
+        "Horas extra al 50 %, al 100 % y horas de refrigerio del período de liquidación 26→25, tal como las calcula Humand " +
+        "con sus políticas de marcaje (no se recalculan acá). Sin empleadoId: acumulado por persona (días con extras, HE50, HE100, " +
+        "total, refrigerio, días con refrigerio). Con empleadoId: el detalle día por día. " +
+        "Usala para 'horas extra de X', 'quién hizo más extras en octubre', 'refrigerios del mes'.";
+    public string Etiqueta => "sumando horas extra…";
+    public string SchemaJson => """
+        {"type":"object","properties":{
+          "anio":{"type":"integer"},
+          "mes":{"type":"integer","description":"1-12; período 26 del mes anterior al 25"},
+          "empleadoId":{"type":"integer","description":"Detalle día por día de un empleado (opcional)"}
+        },"required":["anio","mes"]}
+        """;
+
+    public async Task<string> EjecutarAsync(JsonElement args, CancellationToken ct = default)
+    {
+        var anio = Args.Entero(args, "anio");
+        var mes = Args.Entero(args, "mes");
+        if (mes is < 1 or > 12) throw new ArgumentException("mes debe estar entre 1 y 12.");
+
+        if (Args.EnteroOpcional(args, "empleadoId") is int empleadoId)
+            return Compactador.Lista(await horasExtras.DetalleMensualAsync(empleadoId, anio, mes, ct: ct));
+        return Compactador.Lista(await horasExtras.ReporteMensualAsync(anio, mes, ct));
     }
 }
 

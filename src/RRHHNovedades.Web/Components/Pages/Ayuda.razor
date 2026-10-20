@@ -24,6 +24,7 @@
                 <MudListItem T="string" Icon="@Icons.Material.Filled.Dashboard">Muestra el <b>Dashboard</b> con presentes, tardanzas, ausentes y justificados.</MudListItem>
                 <MudListItem T="string" Icon="@Icons.Material.Filled.Send">Envía <b>3 partes diarios por WhatsApp</b> al equipo de RR. HH. (mañana, tarde y noche).</MudListItem>
                 <MudListItem T="string" Icon="@Icons.Material.Filled.NightsStay">Arma el <b>reporte mensual de Nocturnidad</b> (horas trabajadas entre las 21:00 y las 06:00).</MudListItem>
+                <MudListItem T="string" Icon="@Icons.Material.Filled.MoreTime">Arma el <b>reporte mensual de Horas extras y refrigerio</b> (según las políticas de marcaje de Humand).</MudListItem>
             </MudList>
             <MudText Typo="Typo.body2" Class="mt-2">
                 No hay que cargar nada a mano acá: <b>la fuente de los datos es Humand</b>. Si algo está mal en el sistema
@@ -171,6 +172,21 @@
 
     <MudExpansionPanel>
         <TitleContent>
+            <div class="d-flex align-center gap-2"><MudIcon Icon="@Icons.Material.Filled.MoreTime" Color="Color.Warning" /><MudText Style="font-weight:600;">Horas extras y refrigerio (sección nueva)</MudText><MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Filled">Nuevo</MudChip></div>
+        </TitleContent>
+        <ChildContent>
+            <MudList T="string" Dense="true">
+                <MudListItem T="string" Icon="@Icons.Material.Filled.TableChart">La página <b>Horas extras y refrigerio</b> muestra, para el <b>período de liquidación (26 al 25)</b>, el acumulado por empleado de <b>horas extra al 50 %</b>, <b>al 100 %</b>, el total, las <b>horas de refrigerio</b> y los días con extras y con refrigerio. Arriba están los totales del período; se puede <b>filtrar por área</b> y <b>buscar</b> por nombre, legajo o área.</MudListItem>
+                <MudListItem T="string" Icon="@Icons.Material.Filled.Policy"><b>Las horas no se calculan acá: las calcula Humand</b> con las <b>políticas de marcaje</b> cargadas allá, sobre las fichadas reales del fichador. Hoy esas políticas son: <b>extras al 50 %</b> = horas trabajadas por encima del horario, de lunes a viernes y los sábados hasta las 16:00; <b>extras al 100 %</b> = sábados desde las 16:00 (domingos y feriados deberían ir acá también según la política, pero no hubo casos en el relevamiento); <b>refrigerio</b> = de lunes a viernes, las horas extra que superan las 3 (ej. 3,9 h extra ⇒ 0,9 de refrigerio; 2 h extra ⇒ nada), y los sábados sin horario asignado cuenta toda la jornada. Si un número parece raro, se revisa la política o la fichada en Humand, no acá.</MudListItem>
+                <MudListItem T="string" Icon="@Icons.Material.Filled.Numbers">Las horas se muestran <b>con decimales, tal como las entrega Humand</b> (sin redondeo propio). Los días en que la persona trabajó su horario normal no aparecen en el detalle salvo que actives <b>"Mostrar días en 0"</b>.</MudListItem>
+                <MudListItem T="string" Icon="@Icons.Material.Filled.CloudSync">Si un mes se ve vacío o incompleto, el botón <b>"Sincronizar período"</b> vuelve a traer de Humand todos los días de ese mes (también sirve para actualizar horas de días ya cargados; tarda unos minutos).</MudListItem>
+                <MudListItem T="string" Icon="@Icons.Material.Filled.Download">Clic en una fila abre el detalle día por día (fichadas, extras y refrigerio). El botón <b>Excel</b> descarga Resumen + Detalle, respetando el filtro de área. El asistente también responde preguntas como "horas extra de Pérez en octubre".</MudListItem>
+            </MudList>
+        </ChildContent>
+    </MudExpansionPanel>
+
+    <MudExpansionPanel>
+        <TitleContent>
             <div class="d-flex align-center gap-2"><MudIcon Icon="@Icons.Material.Filled.BeachAccess" Color="Color.Warning" /><MudText Style="font-weight:600;">Vacaciones (sección nueva)</MudText><MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Filled">Nuevo</MudChip></div>
         </TitleContent>
         <ChildContent>
@@ -287,5 +303,5 @@
 
 @code {
     // Actualizar esta fecha cada vez que se modifique el manual (ver CLAUDE.md → "Manual de uso").
-    private const string UltimaActualizacion = "19/10/2026";
+    private const string UltimaActualizacion = "20/10/2026";
 }

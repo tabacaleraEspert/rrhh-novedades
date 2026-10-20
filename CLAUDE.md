@@ -39,12 +39,14 @@ src/RRHHNovedades.Web/
 │                           Presentismo (planilla 26→25), Nocturnidad (hs 21-06),
 │                           Ausentismo (rango, día/semana/mes + licencias manuales),
 │                           Empleados, Configuracion, Ayuda (manual de uso),
-│                           Login, Error, NotFound
+│                           Login, Error, NotFound. Nuevas (Features:*): Tardanzas,
+│                           Vacaciones, Demografia, HorasExtras (HE 50/100 + refrigerio
+│                           de categorizedHours de Humand, spec 0002)
 ├── Components/Layout/    → MainLayout, EmptyLayout, NavMenu
 ├── Services/             → IHumandService (HumandService / MockHumandService),
 │                           IngestaService (sync+clasificación+overlay licencias manuales),
 │                           ParteService (arma+envía), ParteScheduler (06/07/14h),
-│                           PresentismoService, NocturnidadService, AusentismoService,
+│                           PresentismoService, NocturnidadService, HorasExtrasService, AusentismoService,
 │                           LicenciaManualService, TwilioService
 ├── Options/              → AsistenciaOptions, HumandOptions, TwilioOptions
 ├── Data/                 → AppDbContext + SeedData

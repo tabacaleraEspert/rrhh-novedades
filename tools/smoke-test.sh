@@ -135,7 +135,7 @@ replayc=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$BASE/api/auth/sso" -H
 [ "$replayc" = "401" ] && verde "  OK   replay del ticket → 401" || { rojo "  FAIL replay (HTTP $replayc, esperaba 401)"; FALLOS=$((FALLOS+1)); }
 
 echo "[5/5] Páginas clave responden..."
-for ruta in "/" "/ayuda" "/empleados" "/mensajes" "/nocturnidad" "/ausentismo"; do
+for ruta in "/" "/ayuda" "/empleados" "/mensajes" "/nocturnidad" "/ausentismo" "/horas-extras"; do
     pc=$(curl -s -b "$COOKIES" -o /dev/null -w "%{http_code}" "$BASE$ruta")
     [ "$pc" = "200" ] && verde "  OK   $ruta" || { rojo "  FAIL $ruta (HTTP $pc)"; FALLOS=$((FALLOS+1)); }
 done

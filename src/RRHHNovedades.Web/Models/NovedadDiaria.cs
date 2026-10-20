@@ -36,6 +36,12 @@ public class NovedadDiaria
     /// </summary>
     public double HorasRefrigerio { get; set; }
 
+    /// <summary>Horas extra al 50 % del día (categoría "Horas extras al 50" de Humand). 0 si no tuvo.</summary>
+    public double HorasExtras50 { get; set; }
+
+    /// <summary>Horas extra al 100 % del día (categoría "Horas extras al 100" de Humand). 0 si no tuvo.</summary>
+    public double HorasExtras100 { get; set; }
+
     /// <summary>Última vez que se sincronizó/recalculó desde Humand.</summary>
     public DateTime ActualizadoUtc { get; set; }
 }

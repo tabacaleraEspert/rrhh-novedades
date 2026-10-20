@@ -103,3 +103,12 @@ Spec/plan/tasks en `specs/0001-empleados-bloqueados/`.
 ### Review
 Filtro global elegido sobre filtrar a mano en ~12 consultas: cubre asistente y pantallas futuras;
 opt-out explícito solo en ingesta/parte/licencias. Sin `VisibilidadEmpleados` (tests) se ve todo.
+
+## Horas extras y refrigerio — 2026-10-20
+
+Pedido Davor: sección como Nocturnidad con horas extra y refrigerio, según las políticas de
+Humand + fichador. Spec/plan/tasks en `specs/0002-horas-extras-refrigerio/`.
+- [x] Relevamiento API real: categorías "Horas extras al 50" / "al 100" / "Refrigerio" / "Horas nocturnas"
+- [x] Ingesta guarda HE50/HE100 (refrigerio ya estaba) · servicio · página `/horas-extras` · asistente · Ayuda
+- [x] Tests + smoke
+- [ ] DDL prod `infra/ddl-2026-10-20-horas-extras.sh` → push → "Sincronizar período" (octubre)

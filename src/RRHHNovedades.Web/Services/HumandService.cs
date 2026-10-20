@@ -221,14 +221,22 @@ public class HumandService : IHumandService
         bool esFeriado = it.TryGetProperty("holidays", out var hol)
             && hol.ValueKind == JsonValueKind.Array && hol.GetArrayLength() > 0;
 
-        // categorizedHours: horas por categoría de las políticas de marcaje (ej. "Refrigerio",
-        // "Horas extras al 50"). Hoy solo interesa el refrigerio.
-        double refrigerio = 0;
+        // categorizedHours: horas por categoría de las políticas de marcaje de Humand. Categorías
+        // reales de Espert (oct-2026): "Horas extras al 50", "Horas extras al 100", "Refrigerio",
+        // "Horas nocturnas" (esta última no se usa: Nocturnidad calcula con las fichadas).
+        double refrigerio = 0, extras50 = 0, extras100 = 0;
         if (it.TryGetProperty("categorizedHours", out var chs) && chs.ValueKind == JsonValueKind.Array)
             foreach (var ch in chs.EnumerateArray())
-                if (ch.TryGetProperty("category", out var cat) && cat.ValueKind == JsonValueKind.Object
-                    && Str(cat, "name")?.Contains("refrigerio", StringComparison.OrdinalIgnoreCase) == true)
-                    refrigerio += Numero(ch, "hours") ?? 0;
+            {
+                if (!ch.TryGetProperty("category", out var cat) || cat.ValueKind != JsonValueKind.Object) continue;
+                var horas = Numero(ch, "hours") ?? 0;
+                switch (TipoCategoriaHoras(Str(cat, "name")))
+                {
+                    case CategoriaHoras.Refrigerio: refrigerio += horas; break;
+                    case CategoriaHoras.Extras50: extras50 += horas; break;
+                    case CategoriaHoras.Extras100: extras100 += horas; break;
+                }
+            }
 
         return new JornadaHumand(
             Str(it, "employeeId") ?? string.Empty,
@@ -240,7 +248,26 @@ public class HumandService : IHumandService
             entrada, salida, inicioTeorico,
             esFeriado,
             permisosDiaCompleto,
-            HorasRefrigerio: refrigerio);
+            HorasRefrigerio: refrigerio,
+            HorasExtras50: extras50,
+            HorasExtras100: extras100);
+    }
+
+    public enum CategoriaHoras { Otra, Refrigerio, Extras50, Extras100 }
+
+    /// <summary>
+    /// Clasifica el nombre de una categoría de categorizedHours. Se matchea por contenido (no por
+    /// igualdad) para tolerar cambios menores de nombre en Humand ("Horas extras al 50%", etc.).
+    /// internal para testear (InternalsVisibleTo RRHHNovedades.Tests).
+    /// </summary>
+    internal static CategoriaHoras TipoCategoriaHoras(string? nombre)
+    {
+        if (string.IsNullOrWhiteSpace(nombre)) return CategoriaHoras.Otra;
+        if (nombre.Contains("refrigerio", StringComparison.OrdinalIgnoreCase)) return CategoriaHoras.Refrigerio;
+        if (!nombre.Contains("extra", StringComparison.OrdinalIgnoreCase)) return CategoriaHoras.Otra;
+        if (nombre.Contains("100")) return CategoriaHoras.Extras100;
+        if (nombre.Contains("50")) return CategoriaHoras.Extras50;
+        return CategoriaHoras.Otra;
     }
 
     private async Task<string> GetAsync(string path, CancellationToken ct)

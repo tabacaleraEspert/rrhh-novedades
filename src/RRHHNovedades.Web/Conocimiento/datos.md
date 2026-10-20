@@ -42,6 +42,13 @@ Precedencia de la clasificación (la aplica el sistema, vos solo la explicás): 
 
 - Horas nocturnas: banda **21:00–06:00** (cruza medianoche), redondeo: ≥45 minutos cuenta hora completa.
 
+## Horas extras y refrigerio
+
+- **No las calcula este sistema**: las calcula Humand con sus políticas de marcaje sobre las fichadas y se guardan por día. Si un valor parece raro, se revisa en Humand.
+- Categorías: **HE al 50 %** (horas por encima del horario, lun–vie y sábados hasta las 16:00), **HE al 100 %** (sábados desde las 16:00; domingos y feriados no se observaron todavía) y **Refrigerio** (lun–vie: las horas extra que superan las 3; sábados sin horario: toda la jornada).
+- Mismo período de liquidación que nocturnidad (26 → 25). Las horas tienen decimales (ej. 3,89); no se redondean.
+- Solo hay datos para los días sincronizados: un mes sin horas puede ser un mes sin sincronizar (verificar cobertura).
+
 ## Cobertura de datos (lo más importante)
 
 - Hay **una fila por persona por día**, solo para los días que se sincronizaron. La sincronización automática cubre solo el día corriente; **el histórico se carga a mano por rangos**.

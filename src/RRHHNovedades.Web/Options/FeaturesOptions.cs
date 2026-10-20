@@ -13,6 +13,7 @@ public class FeaturesOptions
     public bool Tardanzas { get; set; } = true;
     public bool Vacaciones { get; set; } = true;
     public bool Demografia { get; set; } = true;
+    public bool HorasExtras { get; set; } = true;
 
     /// <summary>
     /// URL de Sueldos RRHH (sueldos-rrhh). Aparece en el menú (Admin/RRHH) y abre en pestaña nueva;

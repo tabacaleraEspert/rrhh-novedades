@@ -24,7 +24,7 @@
     @* ── Secciones NUEVAS del mega tablero (ago-2026) ─────────────────────────
        Van agrupadas y con chip "Nuevo" para distinguirlas del sistema original.
        Cada una se apaga por config (Features:*) sin deploy. *@
-    @if (Features.Value.Tardanzas || Features.Value.Vacaciones || Features.Value.Demografia)
+    @if (Features.Value.Tardanzas || Features.Value.Vacaciones || Features.Value.Demografia || Features.Value.HorasExtras)
     {
         <div class="px-4 pt-3 pb-1 d-flex align-center gap-2">
             <MudText Typo="Typo.overline" Color="Color.Secondary" Style="letter-spacing:.1em;">Nuevo</MudText>
@@ -47,6 +47,12 @@
         {
             <MudNavLink Href="/demografia" Icon="@Icons.Material.Filled.Diversity3">
                 Demografía
+            </MudNavLink>
+        }
+        @if (Features.Value.HorasExtras)
+        {
+            <MudNavLink Href="/horas-extras" Icon="@Icons.Material.Filled.MoreTime">
+                Horas extras y refrigerio
             </MudNavLink>
         }
         <MudDivider Class="my-1" />

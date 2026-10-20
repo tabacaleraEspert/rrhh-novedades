@@ -89,7 +89,23 @@ Mapeo a nuestros estados de jornada (en este orden):
 
 | Otros | |
 |---|---|
-| **Horas extra** | `incidences` contiene `EXTRA_HOURS` (cantidad en `hours.worked` − `hours.scheduled`) |
+| **Horas extra / refrigerio** | `categorizedHours` (ver abajo). `EXTRA_HOURS` en `incidences` **no viene poblado** en la operación real (0 casos en 5.150 jornadas, oct-2026). |
+
+### `categorizedHours` — políticas de marcaje reales de Espert (relevado 20-oct-2026)
+
+El OpenAPI dice `category.name ∈ {REGULAR, EXTRA}`, pero en la práctica el nombre es el de la
+**política de marcaje** configurada en Humand. Período 26/09 → 20/10/2026, 206 empleados:
+
+| `category.name` | Jornadas | Comportamiento observado |
+|---|---|---|
+| `Horas extras al 50` | 722 | Horas por encima de `hours.scheduled`, lun–vie y sábados hasta las 16:00. |
+| `Horas extras al 100` | 81 | Solo sábados desde las 16:00 (sin domingos/feriados en la muestra). |
+| `Refrigerio` | 639 | Lun–vie: las extras que superan las 3 h (3,89 ⇒ 0,89). Sábados sin horario: **toda la jornada**. |
+| `Horas nocturnas` | 635 | Humand también las calcula; Nocturnidad sigue con el cálculo propio (banda 21–06). |
+
+Las consume `HumandService.MapJornada` → `JornadaHumand.HorasRefrigerio/HorasExtras50/HorasExtras100`
+(match por contenido del nombre: "refrigerio" / "extra"+"100" / "extra"+"50"). No existe endpoint
+público para leer las políticas: la única forma de verlas es por sus efectos en los day-summaries.
 
 > Implicancia: **no hace falta un motor de cálculo de tardanza/ausencia desde cero**; se consume la
 > clasificación de Humand (`LATE`/`ABSENT`) y la justificación se resuelve con los `timeOffRequests`

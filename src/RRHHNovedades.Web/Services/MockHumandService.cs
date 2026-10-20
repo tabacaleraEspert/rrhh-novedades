@@ -70,25 +70,31 @@ public class MockHumandService : IHumandService
         var list = new List<JornadaHumand>();
 
         // Distribución de ejemplo: presentes, tardes, ausentes (con/sin permiso), franco.
+        // he50/he100/refrigerio imitan las categorías de las políticas de Humand (ver spec 0002):
+        // la salida se corre con las horas extra para que la fichada sea coherente.
         JornadaHumand J(string id, TimeOnly? inicioTeorico, string[] inc, string[] permisos,
-            TimeOnly? entrada, bool workday = true, bool schedule = true) =>
-            new(id, fecha, workday, schedule, inc, permisos, entrada, entrada?.AddHours(8), inicioTeorico);
+            TimeOnly? entrada, bool workday = true, bool schedule = true,
+            double he50 = 0, double he100 = 0, double refrigerio = 0) =>
+            new(id, fecha, workday, schedule, inc, permisos, entrada, entrada?.AddHours(8 + he50 + he100), inicioTeorico,
+                HorasRefrigerio: refrigerio, HorasExtras50: he50, HorasExtras100: he100);
 
         var t8 = new TimeOnly(8, 0);
+        bool finDeSemana = fecha.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday;
         foreach (var e in Empleados)
         {
             if (!ids.Contains(e.EmployeeInternalId)) continue;
             list.Add(e.EmployeeInternalId switch
             {
-                "EMP-001" => J(e.EmployeeInternalId, t8, [], [], new TimeOnly(7, 58)),                       // Presente
+                "EMP-001" => J(e.EmployeeInternalId, t8, [], [], new TimeOnly(7, 58), he50: finDeSemana ? 0 : 3.5, refrigerio: finDeSemana ? 0 : 0.5), // Presente; lun-vie 3,5 h extra al 50 (> 3 ⇒ refrigerio)
                 "EMP-002" => J(e.EmployeeInternalId, t8, ["LATE"], [], new TimeOnly(8, 25)),                 // Tarde
                 "EMP-003" => J(e.EmployeeInternalId, t8, ["ABSENT"], [], null),                              // Ausente injustificado
                 "EMP-004" => J(e.EmployeeInternalId, t8, ["ABSENT"], ["Vacaciones"], null),                 // Justificado
                 "EMP-005" => J(e.EmployeeInternalId, t8, ["ABSENT"], ["Certificado médico"], null),         // Justificado
-                "EMP-006" => J(e.EmployeeInternalId, new TimeOnly(14, 0), [], [], new TimeOnly(14, 3)),      // Presente (tarde turno)
+                "EMP-006" => J(e.EmployeeInternalId, new TimeOnly(14, 0), [], [], new TimeOnly(14, 3), he50: finDeSemana ? 0 : 1),  // Presente (turno tarde), 1 h extra lun-vie (sale 23:03, no cruza medianoche)
                 "EMP-007" => J(e.EmployeeInternalId, new TimeOnly(14, 0), ["LATE"], [], new TimeOnly(14, 40)),// Tarde (turno tarde)
                 "EMP-008" => J(e.EmployeeInternalId, null, [], [], null, workday: false, schedule: false),  // Franco
-                "EMP-009" => J(e.EmployeeInternalId, new TimeOnly(22, 0), [], [], new TimeOnly(21, 58)),     // Presente (noche; salida cruza medianoche: 05:58)
+                "EMP-009" => J(e.EmployeeInternalId, new TimeOnly(22, 0), [], [], new TimeOnly(21, 58),
+                               he50: finDeSemana ? 0 : 1, he100: fecha.DayOfWeek == DayOfWeek.Saturday ? 4 : 0), // Presente (noche; sábado: extras al 100)
                 "EMP-010" => J(e.EmployeeInternalId, new TimeOnly(22, 0), ["LATE"], [], new TimeOnly(22, 20)),// Tarde (turno noche)
                 "EMP-011" => J(e.EmployeeInternalId, t8, ["ABSENT"], [], null),                              // Ausente, pero BLOQUEADO: no va al parte
                 _ => J(e.EmployeeInternalId, t8, [], [], t8)

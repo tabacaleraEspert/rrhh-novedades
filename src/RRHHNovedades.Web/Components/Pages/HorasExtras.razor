@@ -1,0 +1,311 @@
+@page "/horas-extras"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject IHorasExtrasService HorasExtrasSrv
+@inject IIngestaService Ingesta
+@inject IReloj Reloj
+@inject IJSRuntime JS
+@inject ISnackbar Snackbar
+@inject Microsoft.Extensions.Options.IOptions<RRHHNovedades.Web.Options.FeaturesOptions> Features
+@using RRHHNovedades.Web.Services
+
+<PageTitle>Horas extras y refrigerio - RRHH</PageTitle>
+
+@if (!Features.Value.HorasExtras)
+{
+    <MudAlert Severity="Severity.Info" Class="mt-4">
+        La sección Horas extras y refrigerio está deshabilitada (Features:HorasExtras). Las secciones históricas del tablero no cambian.
+    </MudAlert>
+    return;
+}
+
+<div class="d-flex align-center justify-space-between mb-1 flex-wrap gap-2">
+    <div>
+        <div class="d-flex align-center gap-2">
+            <MudText Typo="Typo.h5" Style="font-weight:600;">Horas extras y refrigerio</MudText>
+            <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Filled">Nuevo</MudChip>
+        </div>
+        <MudText Typo="Typo.body2" Color="Color.Secondary">
+            Horas extra al <b>50 %</b> y al <b>100 %</b> y horas de <b>refrigerio</b> según las <b>políticas de marcaje de
+            Humand</b> aplicadas a las fichadas reales (acá no se recalcula nada). El mes es el <b>período de
+            liquidación</b>: @PeriodoTexto(). Clic en una fila para ver el detalle día por día.
+        </MudText>
+    </div>
+    <div class="d-flex align-center gap-2 flex-wrap">
+        <MudSelect T="string" Label="Área" Value="_area" ValueChanged="OnAreaChanged" Clearable="true"
+                   Style="min-width:180px;" Margin="Margin.Dense" Dense="true">
+            @foreach (var a in _areas)
+            {
+                <MudSelectItem T="string" Value="@a">@a</MudSelectItem>
+            }
+        </MudSelect>
+        <MudSelect T="int" Label="Mes" Value="_mes" ValueChanged="OnMesChanged" Style="min-width:140px;"
+                   Margin="Margin.Dense" Dense="true">
+            @for (int m = 1; m <= 12; m++)
+            {
+                var mes = m;
+                <MudSelectItem T="int" Value="@mes">@NombreMes(mes)</MudSelectItem>
+            }
+        </MudSelect>
+        <MudSelect T="int" Label="Año" Value="_anio" ValueChanged="OnAnioChanged" Style="min-width:110px;"
+                   Margin="Margin.Dense" Dense="true">
+            @foreach (var a in _anios)
+            {
+                <MudSelectItem T="int" Value="@a">@a</MudSelectItem>
+            }
+        </MudSelect>
+        <MudButton Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.CloudSync"
+                   OnClick="SincronizarPeriodo" Disabled="_syncing" title="Trae de Humand los días del período elegido (para meses sin datos o para actualizar las horas)">
+            @(_syncing ? _syncMsg : "Sincronizar período")
+        </MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Filled.Download"
+                   OnClick="ExportarExcel" Disabled="@(_filtradas.Count == 0 || _syncing)">Excel</MudButton>
+    </div>
+</div>
+
+<MudGrid Class="mt-1" Spacing="2">
+    <MudItem xs="6" sm="3">
+        <MudPaper Class="pa-4" Elevation="1">
+            <div class="d-flex align-center justify-space-between">
+                <MudText Typo="Typo.overline" Color="Color.Secondary">Horas extra al 50 %</MudText>
+                <MudIcon Icon="@Icons.Material.Filled.MoreTime" Color="Color.Primary" Size="Size.Small" />
+            </div>
+            <MudText Typo="Typo.h4" Style="font-weight:600;">@H(_filtradas.Sum(f => f.Extras50))</MudText>
+            <MudText Typo="Typo.caption" Color="Color.Secondary">@(_area ?? "todas las áreas") · @PeriodoTexto()</MudText>
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="6" sm="3">
+        <MudPaper Class="pa-4" Elevation="1">
+            <div class="d-flex align-center justify-space-between">
+                <MudText Typo="Typo.overline" Color="Color.Secondary">Horas extra al 100 %</MudText>
+                <MudIcon Icon="@Icons.Material.Filled.Weekend" Color="Color.Primary" Size="Size.Small" />
+            </div>
+            <MudText Typo="Typo.h4" Style="font-weight:600;">@H(_filtradas.Sum(f => f.Extras100))</MudText>
+            <MudText Typo="Typo.caption" Color="Color.Secondary">sábados desde las 16:00 (según política de Humand)</MudText>
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="6" sm="3">
+        <MudPaper Class="pa-4" Elevation="1">
+            <div class="d-flex align-center justify-space-between">
+                <MudText Typo="Typo.overline" Color="Color.Secondary">Refrigerio (hs)</MudText>
+                <MudIcon Icon="@Icons.Material.Filled.Restaurant" Color="Color.Primary" Size="Size.Small" />
+            </div>
+            <MudText Typo="Typo.h4" Style="font-weight:600;">@H(_filtradas.Sum(f => f.Refrigerio))</MudText>
+            <MudText Typo="Typo.caption" Color="Color.Secondary">@_filtradas.Sum(f => f.DiasConRefrigerio) días con refrigerio</MudText>
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="6" sm="3">
+        <MudPaper Class="pa-4" Elevation="1">
+            <div class="d-flex align-center justify-space-between">
+                <MudText Typo="Typo.overline" Color="Color.Secondary">Empleados</MudText>
+                <MudIcon Icon="@Icons.Material.Filled.People" Color="Color.Primary" Size="Size.Small" />
+            </div>
+            <MudText Typo="Typo.h4" Style="font-weight:600;">@_filtradas.Count</MudText>
+            <MudText Typo="Typo.caption" Color="Color.Secondary">con horas extra o refrigerio</MudText>
+        </MudPaper>
+    </MudItem>
+</MudGrid>
+
+<MudPaper Class="mt-3" Elevation="1">
+    <MudTable T="HorasExtrasEmpleado" Items="_filtradas" Dense="true" Hover="true" Loading="_loading" Breakpoint="Breakpoint.Sm"
+              OnRowClick="@(args => AbrirDetalle(args.Item))" RowClass="cursor-pointer">
+        <ToolBarContent>
+            <MudTextField @bind-Value="_buscar" Placeholder="Buscar por nombre, legajo o área" Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Small" Class="mt-0" Immediate="true" />
+        </ToolBarContent>
+        <NoRecordsContent>
+            <MudText>Sin horas extra ni refrigerio registrados en @NombreMes(_mes) @_anio@(_area is null ? "" : $" para {_area}").</MudText>
+        </NoRecordsContent>
+        <HeaderContent>
+            <MudTh>Legajo</MudTh>
+            <MudTh>Empleado</MudTh>
+            <MudTh>Área</MudTh>
+            <MudTh Style="text-align:right;" title="Días del período con alguna hora extra">Días c/ extras</MudTh>
+            <MudTh Style="text-align:right;">HE 50 %</MudTh>
+            <MudTh Style="text-align:right;">HE 100 %</MudTh>
+            <MudTh Style="text-align:right;">Total HE</MudTh>
+            <MudTh Style="text-align:right;" title="Horas de la categoría Refrigerio de Humand">Refrigerio (hs)</MudTh>
+            <MudTh Style="text-align:right;" title="Días del período con refrigerio">Días c/ refrig.</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Legajo">@(context.Legajo ?? "—")</MudTd>
+            <MudTd DataLabel="Empleado">@context.ApellidoNombre</MudTd>
+            <MudTd DataLabel="Área">@(context.Area ?? "—")</MudTd>
+            <MudTd DataLabel="Días c/ extras" Style="text-align:right;">@(context.DiasConExtras > 0 ? context.DiasConExtras.ToString() : "—")</MudTd>
+            <MudTd DataLabel="HE 50 %" Style="text-align:right;">@H(context.Extras50)</MudTd>
+            <MudTd DataLabel="HE 100 %" Style="text-align:right;">@H(context.Extras100)</MudTd>
+            <MudTd DataLabel="Total HE" Style="text-align:right;font-weight:600;">@H(context.TotalExtras)</MudTd>
+            <MudTd DataLabel="Refrigerio (hs)" Style="text-align:right;">@H(context.Refrigerio)</MudTd>
+            <MudTd DataLabel="Días c/ refrig." Style="text-align:right;">@(context.DiasConRefrigerio > 0 ? context.DiasConRefrigerio.ToString() : "—")</MudTd>
+        </RowTemplate>
+    </MudTable>
+</MudPaper>
+
+<MudDialog @bind-Visible="_detVisible" Options="_dlgOpts">
+    <TitleContent>
+        <MudText Typo="Typo.h6">@_detNombre — @NombreMes(_mes) @_anio</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudSwitch T="bool" @bind-Value="_detMostrarCeros" Color="Color.Primary" Size="Size.Small" Class="mb-1"
+                   Label="Mostrar días en 0 (sin horas extra ni refrigerio)" />
+        <MudSimpleTable Dense="true">
+            <thead>
+                <tr>
+                    <th style="text-align:left;">Fecha</th><th>Entrada</th><th>Salida</th>
+                    <th style="text-align:right;">HE 50 %</th><th style="text-align:right;">HE 100 %</th><th style="text-align:right;">Refrigerio</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var d in _detFilas)
+                {
+                    <tr style="@(d.TieneHoras ? null : "opacity:0.55;")">
+                        <td>@d.Fecha.ToString("ddd dd/MM")</td>
+                        <td style="text-align:center;">@(d.Entrada?.ToString("HH:mm") ?? "—")</td>
+                        <td style="text-align:center;">@(d.Salida?.ToString("HH:mm") ?? "—")</td>
+                        <td style="text-align:right;">@H(d.Extras50)</td>
+                        <td style="text-align:right;">@H(d.Extras100)</td>
+                        <td style="text-align:right;">@H(d.Refrigerio)</td>
+                    </tr>
+                }
+            </tbody>
+            <tfoot>
+                <tr style="border-top:2px solid var(--mud-palette-lines-default);">
+                    <td style="font-weight:600;">Total (@_detDias.Count(x => x.Extras50 > 0 || x.Extras100 > 0) días c/ extras)</td>
+                    <td></td><td></td>
+                    <td style="text-align:right;font-weight:600;">@H(_detDias.Sum(x => x.Extras50))</td>
+                    <td style="text-align:right;font-weight:600;">@H(_detDias.Sum(x => x.Extras100))</td>
+                    <td style="text-align:right;font-weight:600;">@H(_detDias.Sum(x => x.Refrigerio))</td>
+                </tr>
+            </tfoot>
+        </MudSimpleTable>
+        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-2 d-block">
+            Entrada y salida son las fichadas reales. Las horas son las que calcula Humand con sus políticas de marcaje
+            (sin redondeo propio). Un día en 0 es una jornada sin horas extra ni refrigerio (trabajó su horario, faltó o fue franco).
+        </MudText>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => _detVisible = false)">Cerrar</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private int _mes;
+    private int _anio;
+    private string? _area;
+    private List<int> _anios = [];
+    private List<string> _areas = [];
+    private bool _loading = true;
+    private IReadOnlyList<HorasExtrasEmpleado> _filas = [];
+    private string _buscar = string.Empty;
+    private List<HorasExtrasEmpleado> _filtradas =>
+        _filas.Where(f => (_area is null || f.Area == _area) && PasaBusqueda(f)).ToList();
+
+    private bool PasaBusqueda(HorasExtrasEmpleado f)
+    {
+        if (string.IsNullOrWhiteSpace(_buscar)) return true;
+        var q = _buscar.Trim().ToLowerInvariant();
+        return f.ApellidoNombre.ToLowerInvariant().Contains(q)
+            || (f.Area ?? "").ToLowerInvariant().Contains(q)
+            || (f.Legajo ?? "").ToLowerInvariant().Contains(q);
+    }
+
+    // Horas con hasta 2 decimales; 0 se muestra como "—".
+    private static string H(double h) => h > 0 ? h.ToString("0.##") : "—";
+
+    // Detalle por empleado. Se trae el período completo (con días en 0) y el switch decide qué
+    // se ve: los ceros futuros no se muestran nunca (todavía no pasaron).
+    private bool _detVisible;
+    private bool _detMostrarCeros;
+    private string _detNombre = string.Empty;
+    private IReadOnlyList<HorasExtrasDia> _detDias = [];
+    private List<HorasExtrasDia> _detFilas =>
+        _detDias.Where(d => d.TieneHoras || (_detMostrarCeros && d.Fecha <= Reloj.Hoy)).ToList();
+    private readonly DialogOptions _dlgOpts = new() { MaxWidth = MaxWidth.Small, FullWidth = true, CloseOnEscapeKey = true };
+
+    protected override async Task OnInitializedAsync()
+    {
+        var hoy = Reloj.Hoy;
+        _mes = hoy.Month;
+        _anio = hoy.Year;
+        _anios = Enumerable.Range(hoy.Year - 2, 3).Reverse().ToList();
+        await Cargar();
+    }
+
+    private async Task OnMesChanged(int m) { _mes = m; await Cargar(); }
+    private async Task OnAnioChanged(int a) { _anio = a; await Cargar(); }
+    private void OnAreaChanged(string? a) => _area = string.IsNullOrEmpty(a) ? null : a;
+
+    private async Task Cargar()
+    {
+        _loading = true;
+        try
+        {
+            _filas = await HorasExtrasSrv.ReporteMensualAsync(_anio, _mes);
+            _areas = _filas.Select(f => f.Area).Where(a => !string.IsNullOrWhiteSpace(a))
+                .Select(a => a!).Distinct().OrderBy(a => a).ToList();
+            if (_area is not null && !_areas.Contains(_area)) _area = null;
+        }
+        catch (Exception ex)
+        {
+            _filas = [];
+            Snackbar.Add($"Error al cargar el reporte: {ex.Message}", Severity.Error);
+        }
+        finally { _loading = false; }
+    }
+
+    private async Task AbrirDetalle(HorasExtrasEmpleado? f)
+    {
+        if (f is null) return;
+        _detDias = await HorasExtrasSrv.DetalleMensualAsync(f.EmpleadoId, _anio, _mes, incluirDiasEnCero: true);
+        _detNombre = f.ApellidoNombre;
+        _detVisible = true;
+    }
+
+    private async Task ExportarExcel()
+    {
+        var bytes = await HorasExtrasSrv.ExcelMensualAsync(_anio, _mes, _area);
+        await JS.InvokeVoidAsync("downloadFile", $"horas_extras_{_anio}-{_mes:00}.xlsx",
+            Convert.ToBase64String(bytes),
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    }
+
+    // Trae de Humand cada día del período (idempotente). Sirve para meses viejos sin datos y
+    // para refrescar las horas de días ya cargados (las columnas nuevas se rellenan así).
+    private bool _syncing;
+    private string _syncMsg = string.Empty;
+
+    private async Task SincronizarPeriodo()
+    {
+        var (desde, hastaExcl) = NocturnidadService.PeriodoLiquidacion(_anio, _mes);
+        var hasta = hastaExcl.AddDays(-1);
+        if (hasta > Reloj.Hoy) hasta = Reloj.Hoy;
+        if (desde > Reloj.Hoy) { Snackbar.Add("Ese período todavía no empezó.", Severity.Warning); return; }
+
+        _syncing = true;
+        try
+        {
+            await Ingesta.SincronizarEmpleadosAsync();
+            int total = hasta.DayNumber - desde.DayNumber + 1, i = 0;
+            for (var f = desde; f <= hasta; f = f.AddDays(1))
+            {
+                _syncMsg = $"Sincronizando {++i}/{total}...";
+                StateHasChanged();
+                await Ingesta.SincronizarDiaAsync(f);
+            }
+            await Cargar();
+            Snackbar.Add($"Período sincronizado: {total} días desde Humand.", Severity.Success);
+        }
+        catch (Exception ex) { Snackbar.Add($"Error al sincronizar: {ex.Message}", Severity.Error); }
+        finally { _syncing = false; _syncMsg = string.Empty; }
+    }
+
+    private static string NombreMes(int m) =>
+        System.Globalization.CultureInfo.GetCultureInfo("es-AR").DateTimeFormat.GetMonthName(m) is { } n
+            ? char.ToUpperInvariant(n[0]) + n[1..] : m.ToString();
+
+    private string PeriodoTexto()
+    {
+        var (desde, hasta) = NocturnidadService.PeriodoLiquidacion(_anio, _mes);
+        return $"{desde:dd/MM} al {hasta.AddDays(-1):dd/MM}";
+    }
+}

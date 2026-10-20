@@ -33,8 +33,12 @@ public record JornadaHumand(
     // Ganan aunque el empleado haya fichado (vino, se sintió mal y se fue). null = desconocido
     // (constructores viejos/tests) ⇒ se aplica la regla clásica (permiso solo si no fichó).
     IReadOnlyList<string>? PermisosDiaCompleto = null,
-    // Horas de la categoría "Refrigerio" de categorizedHours (políticas de marcaje de Humand).
-    double HorasRefrigerio = 0);
+    // Horas por categoría de categorizedHours (políticas de marcaje de Humand, relevadas oct-2026):
+    // "Refrigerio", "Horas extras al 50", "Horas extras al 100" (y "Horas nocturnas", que no se usa:
+    // Nocturnidad calcula la banda 21-06 con las fichadas).
+    double HorasRefrigerio = 0,
+    double HorasExtras50 = 0,
+    double HorasExtras100 = 0);
 
 /// <summary>Saldo de un empleado en una política de time-off (`/time-off/balances`).</summary>
 public record SaldoTimeOffHumand(
