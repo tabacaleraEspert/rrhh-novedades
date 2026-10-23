@@ -64,6 +64,8 @@ public class HorasExtrasServiceTests
         Assert.Equal(10.99, perez.Extras50, 2);               // 5 + 3,89 + 2,1
         Assert.Equal(1.14, perez.Extras100, 2);
         Assert.Equal(12.13, perez.TotalExtras, 2);
+        Assert.Equal(11, perez.Extras50Liq);                  // por día: 5 + 4 (3,89 = 3h53) + 2 (2,1 = 2h06)
+        Assert.Equal(1, perez.Extras100Liq);
         Assert.Equal(7.03, perez.Refrigerio, 2);              // 6,14 + 0,89
         Assert.Equal(2, perez.DiasConRefrigerio);
 
@@ -143,15 +145,20 @@ public class HorasExtrasServiceTests
         Assert.Equal(10.99, res.Cell(6, 5).GetValue<double>(), 2);   // HE 50
         Assert.Equal(1.14, res.Cell(6, 6).GetValue<double>(), 2);    // HE 100
         Assert.Equal(12.13, res.Cell(6, 7).GetValue<double>(), 2);   // total
-        Assert.Equal(7.03, res.Cell(6, 8).GetValue<double>(), 2);    // refrigerio
-        Assert.Equal(2, res.Cell(6, 9).GetValue<int>());             // días con refrigerio
+        Assert.Equal(11, res.Cell(6, 8).GetValue<double>());         // HE 50 liq.: 5 + 4 + 2
+        Assert.Equal(1, res.Cell(6, 9).GetValue<double>());          // HE 100 liq.: 1,14 ⇒ 1
+        Assert.Equal(12, res.Cell(6, 10).GetValue<double>());        // total liq.
+        Assert.Equal(7.03, res.Cell(6, 11).GetValue<double>(), 2);   // refrigerio
+        Assert.Equal(2, res.Cell(6, 12).GetValue<int>());            // días con refrigerio
         Assert.Equal("TOTAL", res.Cell(7, 2).GetString());
 
         var det = wb.Worksheet("Detalle");
         Assert.Equal(4, det.RowsUsed().Count() - 1);                 // 1 Gómez + 3 Pérez (sin cabecera)
         Assert.Equal("Gómez, Rosa", det.Cell(2, 2).GetString());
         Assert.Equal("10:59", det.Cell(3, 5).GetString());           // primera fila de Pérez: 26-sep
-        Assert.Equal(6.14, det.Cell(3, 9).GetValue<double>(), 2);
+        Assert.Equal(5, det.Cell(3, 9).GetValue<double>());          // HE 50 liq.
+        Assert.Equal(1, det.Cell(3, 10).GetValue<double>());         // HE 100 liq.
+        Assert.Equal(6.14, det.Cell(3, 11).GetValue<double>(), 2);
     }
 
     [Fact]
@@ -167,4 +174,20 @@ public class HorasExtrasServiceTests
         Assert.Equal("TOTAL", res.Cell(6, 2).GetString());
         Assert.Contains("Logística", res.Cell(1, 1).GetString());
     }
+
+    // Regla RRHH (oct-2026): por día, 48 min o más de fracción suman una hora; menos se descarta.
+    // Casos reales de Derlis Von Brand (20 y 21-oct) + bordes.
+    [Theory]
+    [InlineData(4.3, 4)]    // 4h18
+    [InlineData(4.56, 4)]   // 4h34
+    [InlineData(3.89, 4)]   // 3h53
+    [InlineData(4.8, 5)]    // 4h48 justo en el borde
+    [InlineData(4.79, 4)]   // 4h47
+    [InlineData(0.5, 0)]    // 30 min
+    [InlineData(0.8, 1)]    // 48 min
+    [InlineData(2.1, 2)]
+    [InlineData(5, 5)]
+    [InlineData(0, 0)]
+    public void Redondeo_de_48_minutos_por_dia(double horas, double esperado) =>
+        Assert.Equal(esperado, HorasExtrasService.Redondear(horas));
 }

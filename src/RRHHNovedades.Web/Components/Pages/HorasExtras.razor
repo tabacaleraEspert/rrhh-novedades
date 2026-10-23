@@ -71,7 +71,7 @@
                 <MudIcon Icon="@Icons.Material.Filled.MoreTime" Color="Color.Primary" Size="Size.Small" />
             </div>
             <MudText Typo="Typo.h4" Style="font-weight:600;">@H(_filtradas.Sum(f => f.Extras50))</MudText>
-            <MudText Typo="Typo.caption" Color="Color.Secondary">@(_area ?? "todas las áreas") · @PeriodoTexto()</MudText>
+            <MudText Typo="Typo.caption" Color="Color.Secondary">liquidables: <b>@H(_filtradas.Sum(f => f.Extras50Liq))</b> · @(_area ?? "todas las áreas")</MudText>
         </MudPaper>
     </MudItem>
     <MudItem xs="6" sm="3">
@@ -81,7 +81,7 @@
                 <MudIcon Icon="@Icons.Material.Filled.Weekend" Color="Color.Primary" Size="Size.Small" />
             </div>
             <MudText Typo="Typo.h4" Style="font-weight:600;">@H(_filtradas.Sum(f => f.Extras100))</MudText>
-            <MudText Typo="Typo.caption" Color="Color.Secondary">sábados desde las 16:00 (según política de Humand)</MudText>
+            <MudText Typo="Typo.caption" Color="Color.Secondary">liquidables: <b>@H(_filtradas.Sum(f => f.Extras100Liq))</b> · sábados desde las 16:00</MudText>
         </MudPaper>
     </MudItem>
     <MudItem xs="6" sm="3">
@@ -124,6 +124,9 @@
             <MudTh Style="text-align:right;">HE 50 %</MudTh>
             <MudTh Style="text-align:right;">HE 100 %</MudTh>
             <MudTh Style="text-align:right;">Total HE</MudTh>
+            <MudTh Style="text-align:right;" title="Redondeadas día por día: 48 min o más suman una hora">HE 50 % liq.</MudTh>
+            <MudTh Style="text-align:right;" title="Redondeadas día por día: 48 min o más suman una hora">HE 100 % liq.</MudTh>
+            <MudTh Style="text-align:right;" title="Redondeadas día por día: 48 min o más suman una hora">Total liq.</MudTh>
             <MudTh Style="text-align:right;" title="Horas de la categoría Refrigerio de Humand">Refrigerio (hs)</MudTh>
             <MudTh Style="text-align:right;" title="Días del período con refrigerio">Días c/ refrig.</MudTh>
         </HeaderContent>
@@ -134,7 +137,10 @@
             <MudTd DataLabel="Días c/ extras" Style="text-align:right;">@(context.DiasConExtras > 0 ? context.DiasConExtras.ToString() : "—")</MudTd>
             <MudTd DataLabel="HE 50 %" Style="text-align:right;">@H(context.Extras50)</MudTd>
             <MudTd DataLabel="HE 100 %" Style="text-align:right;">@H(context.Extras100)</MudTd>
-            <MudTd DataLabel="Total HE" Style="text-align:right;font-weight:600;">@H(context.TotalExtras)</MudTd>
+            <MudTd DataLabel="Total HE" Style="text-align:right;">@H(context.TotalExtras)</MudTd>
+            <MudTd DataLabel="HE 50 % liq." Style="text-align:right;">@H(context.Extras50Liq)</MudTd>
+            <MudTd DataLabel="HE 100 % liq." Style="text-align:right;">@H(context.Extras100Liq)</MudTd>
+            <MudTd DataLabel="Total liq." Style="text-align:right;font-weight:600;">@H(context.TotalExtrasLiq)</MudTd>
             <MudTd DataLabel="Refrigerio (hs)" Style="text-align:right;">@H(context.Refrigerio)</MudTd>
             <MudTd DataLabel="Días c/ refrig." Style="text-align:right;">@(context.DiasConRefrigerio > 0 ? context.DiasConRefrigerio.ToString() : "—")</MudTd>
         </RowTemplate>
@@ -152,7 +158,8 @@
             <thead>
                 <tr>
                     <th style="text-align:left;">Fecha</th><th>Entrada</th><th>Salida</th>
-                    <th style="text-align:right;">HE 50 %</th><th style="text-align:right;">HE 100 %</th><th style="text-align:right;">Refrigerio</th>
+                    <th style="text-align:right;">HE 50 %</th><th style="text-align:right;">HE 100 %</th>
+                    <th style="text-align:right;">50 % liq.</th><th style="text-align:right;">100 % liq.</th><th style="text-align:right;">Refrigerio</th>
                 </tr>
             </thead>
             <tbody>
@@ -164,6 +171,8 @@
                         <td style="text-align:center;">@(d.Salida?.ToString("HH:mm") ?? "—")</td>
                         <td style="text-align:right;">@H(d.Extras50)</td>
                         <td style="text-align:right;">@H(d.Extras100)</td>
+                        <td style="text-align:right;">@H(d.Extras50Liq)</td>
+                        <td style="text-align:right;">@H(d.Extras100Liq)</td>
                         <td style="text-align:right;">@H(d.Refrigerio)</td>
                     </tr>
                 }
@@ -174,13 +183,16 @@
                     <td></td><td></td>
                     <td style="text-align:right;font-weight:600;">@H(_detDias.Sum(x => x.Extras50))</td>
                     <td style="text-align:right;font-weight:600;">@H(_detDias.Sum(x => x.Extras100))</td>
+                    <td style="text-align:right;font-weight:600;">@H(_detDias.Sum(x => x.Extras50Liq))</td>
+                    <td style="text-align:right;font-weight:600;">@H(_detDias.Sum(x => x.Extras100Liq))</td>
                     <td style="text-align:right;font-weight:600;">@H(_detDias.Sum(x => x.Refrigerio))</td>
                 </tr>
             </tfoot>
         </MudSimpleTable>
         <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-2 d-block">
             Entrada y salida son las fichadas reales. Las horas son las que calcula Humand con sus políticas de marcaje
-            (sin redondeo propio). Un día en 0 es una jornada sin horas extra ni refrigerio (trabajó su horario, faltó o fue franco).
+            (sin redondeo); las columnas "liq." son las liquidables: por día, 48 minutos o más suman una hora y menos se
+            descartan (ej. 4,56 h = 4 h 34 min ⇒ 4). Un día en 0 es una jornada sin horas extra ni refrigerio (trabajó su horario, faltó o fue franco).
         </MudText>
     </DialogContent>
     <DialogActions>

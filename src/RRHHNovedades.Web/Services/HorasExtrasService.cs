@@ -15,9 +15,14 @@ public record HorasExtrasEmpleado(
     double Extras50,
     double Extras100,
     double Refrigerio,
-    int DiasConRefrigerio)
+    int DiasConRefrigerio,
+    double Extras50Liq = 0,
+    double Extras100Liq = 0)
 {
     public double TotalExtras => Math.Round(Extras50 + Extras100, 2);
+
+    /// <summary>Total liquidable: suma de las horas redondeadas día por día (regla de los 48 min).</summary>
+    public double TotalExtrasLiq => Extras50Liq + Extras100Liq;
 }
 
 /// <summary>Un día del desglose por empleado. Entrada/Salida null = sin fichada ese día.</summary>
@@ -30,6 +35,8 @@ public record HorasExtrasDia(
     double Refrigerio)
 {
     public bool TieneHoras => Extras50 > 0 || Extras100 > 0 || Refrigerio > 0;
+    public double Extras50Liq => HorasExtrasService.Redondear(Extras50);
+    public double Extras100Liq => HorasExtrasService.Redondear(Extras100);
 }
 
 public interface IHorasExtrasService
@@ -120,10 +127,10 @@ public class HorasExtrasService(IDbContextFactory<AppDbContext> dbFactory) : IHo
 
         var res = wb.Worksheets.Add("Resumen");
         res.Cell(1, 1).Value = $"Horas extras y refrigerio — período {periodoTxt}" + (area is null ? "" : $" — {area}");
-        res.Range(1, 1, 1, 9).Merge().Style.Font.SetBold();
-        res.Cell(2, 1).Value = "Horas según las políticas de marcaje de Humand (fichadas reales). Refrigerio: horas de la categoría \"Refrigerio\".";
-        res.Range(2, 1, 2, 9).Merge().Style.Font.SetItalic();
-        string[] cabRes = ["Legajo", "Empleado", "Área", "Días c/ extras", "HE 50%", "HE 100%", "Total HE", "Refrigerio (hs)", "Días c/ refrigerio"];
+        res.Range(1, 1, 1, 12).Merge().Style.Font.SetBold();
+        res.Cell(2, 1).Value = "Horas según las políticas de marcaje de Humand (fichadas reales). \"liq.\" = redondeadas por día: 48 min o más suman una hora, menos se descartan. Refrigerio: horas de la categoría \"Refrigerio\".";
+        res.Range(2, 1, 2, 12).Merge().Style.Font.SetItalic();
+        string[] cabRes = ["Legajo", "Empleado", "Área", "Días c/ extras", "HE 50%", "HE 100%", "Total HE", "HE 50% liq.", "HE 100% liq.", "Total HE liq.", "Refrigerio (hs)", "Días c/ refrigerio"];
         for (int c = 0; c < cabRes.Length; c++) res.Cell(4, c + 1).Value = cabRes[c];
         res.Range(4, 1, 4, cabRes.Length).Style.Font.SetBold();
         int f = 5;
@@ -137,22 +144,26 @@ public class HorasExtrasService(IDbContextFactory<AppDbContext> dbFactory) : IHo
             res.Cell(f, 5).Value = fila.Extras50;
             res.Cell(f, 6).Value = fila.Extras100;
             res.Cell(f, 7).Value = fila.TotalExtras;
-            res.Cell(f, 8).Value = fila.Refrigerio;
-            res.Cell(f, 9).Value = fila.DiasConRefrigerio;
+            res.Cell(f, 8).Value = fila.Extras50Liq;
+            res.Cell(f, 9).Value = fila.Extras100Liq;
+            res.Cell(f, 10).Value = fila.TotalExtrasLiq;
+            res.Cell(f, 11).Value = fila.Refrigerio;
+            res.Cell(f, 12).Value = fila.DiasConRefrigerio;
             f++;
         }
         res.Cell(f, 2).Value = "TOTAL";
-        foreach (var col in new[] { 4, 5, 6, 7, 8, 9 })
+        foreach (var col in new[] { 4, 5, 6, 7, 8, 9, 10, 11, 12 })
         {
             var letra = (char)('A' + col - 1);
             res.Cell(f, col).FormulaA1 = f > 5 ? $"SUM({letra}5:{letra}{f - 1})" : "0";
         }
-        res.Range(f, 1, f, 9).Style.Font.SetBold();
-        res.Range(5, 5, f, 8).Style.NumberFormat.Format = "0.00";
+        res.Range(f, 1, f, 12).Style.Font.SetBold();
+        res.Range(5, 5, f, 7).Style.NumberFormat.Format = "0.00";
+        res.Range(5, 11, f, 11).Style.NumberFormat.Format = "0.00";
         res.Columns().AdjustToContents();
 
         var det = wb.Worksheets.Add("Detalle");
-        string[] cabDet = ["Legajo", "Empleado", "Área", "Fecha", "Entrada", "Salida", "HE 50%", "HE 100%", "Refrigerio (hs)"];
+        string[] cabDet = ["Legajo", "Empleado", "Área", "Fecha", "Entrada", "Salida", "HE 50%", "HE 100%", "HE 50% liq.", "HE 100% liq.", "Refrigerio (hs)"];
         for (int c = 0; c < cabDet.Length; c++) det.Cell(1, c + 1).Value = cabDet[c];
         det.Range(1, 1, 1, cabDet.Length).Style.Font.SetBold();
         f = 2;
@@ -167,10 +178,16 @@ public class HorasExtrasService(IDbContextFactory<AppDbContext> dbFactory) : IHo
             det.Cell(f, 6).Value = x.HoraSalida?.ToString("HH:mm") ?? "—";
             det.Cell(f, 7).Value = R(x.HorasExtras50);
             det.Cell(f, 8).Value = R(x.HorasExtras100);
-            det.Cell(f, 9).Value = R(x.HorasRefrigerio);
+            det.Cell(f, 9).Value = Redondear(x.HorasExtras50);
+            det.Cell(f, 10).Value = Redondear(x.HorasExtras100);
+            det.Cell(f, 11).Value = R(x.HorasRefrigerio);
             f++;
         }
-        if (f > 2) det.Range(2, 7, f - 1, 9).Style.NumberFormat.Format = "0.00";
+        if (f > 2)
+        {
+            det.Range(2, 7, f - 1, 8).Style.NumberFormat.Format = "0.00";
+            det.Range(2, 11, f - 1, 11).Style.NumberFormat.Format = "0.00";
+        }
         det.Columns().AdjustToContents();
 
         using var ms = new MemoryStream();
@@ -187,7 +204,9 @@ public class HorasExtrasService(IDbContextFactory<AppDbContext> dbFactory) : IHo
             Extras50: R(lista.Sum(d => d.HorasExtras50)),
             Extras100: R(lista.Sum(d => d.HorasExtras100)),
             Refrigerio: R(lista.Sum(d => d.HorasRefrigerio)),
-            DiasConRefrigerio: lista.Count(d => d.HorasRefrigerio > 0));
+            DiasConRefrigerio: lista.Count(d => d.HorasRefrigerio > 0),
+            Extras50Liq: lista.Sum(d => Redondear(d.HorasExtras50)),
+            Extras100Liq: lista.Sum(d => Redondear(d.HorasExtras100)));
     }
 
     private static HorasExtrasDia Dia(NovedadDiaria n) =>
@@ -195,4 +214,16 @@ public class HorasExtrasService(IDbContextFactory<AppDbContext> dbFactory) : IHo
 
     // Humand entrega las horas con decimales (ej. 3,89). Se muestran a 2 decimales, sin redondeo propio.
     private static double R(double h) => Math.Round(h, 2);
+
+    /// <summary>
+    /// Horas extra liquidables de UN día (regla RRHH oct-2026): las horas enteras cuentan y la
+    /// fracción suma una hora solo si son 48 minutos o más (4,56 h = 4 h 34 min ⇒ 4; 4,85 h ⇒ 5).
+    /// Se trabaja en minutos enteros para evitar errores de coma flotante en el borde (0,8 h).
+    /// </summary>
+    public static double Redondear(double horas)
+    {
+        if (horas <= 0) return 0;
+        var minutos = (int)Math.Round(horas * 60, MidpointRounding.AwayFromZero);
+        return minutos / 60 + (minutos % 60 >= 48 ? 1 : 0);
+    }
 }
