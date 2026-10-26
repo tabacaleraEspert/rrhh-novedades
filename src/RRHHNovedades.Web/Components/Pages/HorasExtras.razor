@@ -28,7 +28,7 @@
         <MudText Typo="Typo.body2" Color="Color.Secondary">
             Horas extra al <b>50 %</b> y al <b>100 %</b> y horas de <b>refrigerio</b> según las <b>políticas de marcaje de
             Humand</b> aplicadas a las fichadas reales (acá no se recalcula nada). El mes es el <b>período de
-            liquidación</b>: @PeriodoTexto(). Clic en una fila para ver el detalle día por día.
+            liquidación</b>: @PeriodoTexto(). Figura todo el personal; quien no hizo horas aparece en 0. Clic en una fila para ver el detalle día por día.
         </MudText>
     </div>
     <div class="d-flex align-center gap-2 flex-wrap">
@@ -101,7 +101,7 @@
                 <MudIcon Icon="@Icons.Material.Filled.People" Color="Color.Primary" Size="Size.Small" />
             </div>
             <MudText Typo="Typo.h4" Style="font-weight:600;">@_filtradas.Count</MudText>
-            <MudText Typo="Typo.caption" Color="Color.Secondary">con horas extra o refrigerio</MudText>
+            <MudText Typo="Typo.caption" Color="Color.Secondary">@_filtradas.Count(f => f.TotalExtras > 0 || f.Refrigerio > 0) con horas extra o refrigerio</MudText>
         </MudPaper>
     </MudItem>
 </MudGrid>
@@ -114,7 +114,7 @@
                           AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Small" Class="mt-0" Immediate="true" />
         </ToolBarContent>
         <NoRecordsContent>
-            <MudText>Sin horas extra ni refrigerio registrados en @NombreMes(_mes) @_anio@(_area is null ? "" : $" para {_area}").</MudText>
+            <MudText>Sin jornadas registradas en @NombreMes(_mes) @_anio@(_area is null ? "" : $" para {_area}").</MudText>
         </NoRecordsContent>
         <HeaderContent>
             <MudTh>Legajo</MudTh>
@@ -134,7 +134,7 @@
             <MudTd DataLabel="Legajo">@(context.Legajo ?? "—")</MudTd>
             <MudTd DataLabel="Empleado">@context.ApellidoNombre</MudTd>
             <MudTd DataLabel="Área">@(context.Area ?? "—")</MudTd>
-            <MudTd DataLabel="Días c/ extras" Style="text-align:right;">@(context.DiasConExtras > 0 ? context.DiasConExtras.ToString() : "—")</MudTd>
+            <MudTd DataLabel="Días c/ extras" Style="text-align:right;">@context.DiasConExtras</MudTd>
             <MudTd DataLabel="HE 50 %" Style="text-align:right;">@H(context.Extras50)</MudTd>
             <MudTd DataLabel="HE 100 %" Style="text-align:right;">@H(context.Extras100)</MudTd>
             <MudTd DataLabel="Total HE" Style="text-align:right;">@H(context.TotalExtras)</MudTd>
@@ -142,7 +142,7 @@
             <MudTd DataLabel="HE 100 % liq." Style="text-align:right;">@H(context.Extras100Liq)</MudTd>
             <MudTd DataLabel="Total liq." Style="text-align:right;font-weight:600;">@H(context.TotalExtrasLiq)</MudTd>
             <MudTd DataLabel="Refrigerio (hs)" Style="text-align:right;">@H(context.Refrigerio)</MudTd>
-            <MudTd DataLabel="Días c/ refrig." Style="text-align:right;">@(context.DiasConRefrigerio > 0 ? context.DiasConRefrigerio.ToString() : "—")</MudTd>
+            <MudTd DataLabel="Días c/ refrig." Style="text-align:right;">@context.DiasConRefrigerio</MudTd>
         </RowTemplate>
     </MudTable>
 </MudPaper>
@@ -221,8 +221,8 @@
             || (f.Legajo ?? "").ToLowerInvariant().Contains(q);
     }
 
-    // Horas con hasta 2 decimales; 0 se muestra como "—".
-    private static string H(double h) => h > 0 ? h.ToString("0.##") : "—";
+    // Horas con hasta 2 decimales; sin horas se muestra "0" (todo el personal figura, aunque no tenga extras).
+    private static string H(double h) => h > 0 ? h.ToString("0.##") : "0";
 
     // Detalle por empleado. Se trae el período completo (con días en 0) y el switch decide qué
     // se ve: los ceros futuros no se muestran nunca (todavía no pasaron).

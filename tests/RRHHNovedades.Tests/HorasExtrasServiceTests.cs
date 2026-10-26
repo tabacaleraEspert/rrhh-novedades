@@ -56,7 +56,7 @@ public class HorasExtrasServiceTests
         var svc = await SetupAsync(nameof(Reporte_mensual_acumula_por_empleado_solo_el_periodo_de_liquidacion));
         var filas = await svc.ReporteMensualAsync(2026, 10);
 
-        Assert.Equal(2, filas.Count); // Sosa no aparece (sin horas)
+        Assert.Equal(3, filas.Count); // Sosa aparece en 0 (todo el personal del período)
         var perez = filas[0];          // ordenado por total de extras
         Assert.Equal("1001", perez.Legajo);
         Assert.Equal("Pérez, Juan", perez.ApellidoNombre);
@@ -74,6 +74,13 @@ public class HorasExtrasServiceTests
         Assert.Equal(0, gomez.TotalExtras);
         Assert.Equal(0.5, gomez.Refrigerio, 2);
         Assert.Equal(1, gomez.DiasConRefrigerio);
+
+        var sosa = filas[2];
+        Assert.Equal("Sosa, Mario", sosa.ApellidoNombre);
+        Assert.Equal(0, sosa.DiasConExtras);
+        Assert.Equal(0, sosa.TotalExtras);
+        Assert.Equal(0, sosa.TotalExtrasLiq);
+        Assert.Equal(0, sosa.Refrigerio);
     }
 
     [Fact]
@@ -150,7 +157,9 @@ public class HorasExtrasServiceTests
         Assert.Equal(12, res.Cell(6, 10).GetValue<double>());        // total liq.
         Assert.Equal(7.03, res.Cell(6, 11).GetValue<double>(), 2);   // refrigerio
         Assert.Equal(2, res.Cell(6, 12).GetValue<int>());            // días con refrigerio
-        Assert.Equal("TOTAL", res.Cell(7, 2).GetString());
+        Assert.Equal("Sosa, Mario", res.Cell(7, 2).GetString());       // sin horas: figura en 0
+        Assert.Equal(0, res.Cell(7, 7).GetValue<double>());
+        Assert.Equal("TOTAL", res.Cell(8, 2).GetString());
 
         var det = wb.Worksheet("Detalle");
         Assert.Equal(4, det.RowsUsed().Count() - 1);                 // 1 Gómez + 3 Pérez (sin cabecera)

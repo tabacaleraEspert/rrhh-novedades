@@ -70,10 +70,11 @@ public class HorasExtrasService(IDbContextFactory<AppDbContext> dbFactory) : IHo
         var (desde, hasta) = NocturnidadService.PeriodoLiquidacion(anio, mes);
 
         await using var db = await dbFactory.CreateDbContextAsync(ct);
+        // Todo el personal con jornadas en el período, aunque no tenga extras (sale en 0): RRHH
+        // necesita ver la nómina completa, no solo quienes hicieron horas (pedido 26-oct-2026).
         var dias = await db.Novedades
             .Include(n => n.Empleado)
-            .Where(n => n.Fecha >= desde && n.Fecha < hasta
-                     && (n.HorasExtras50 > 0 || n.HorasExtras100 > 0 || n.HorasRefrigerio > 0))
+            .Where(n => n.Fecha >= desde && n.Fecha < hasta)
             .ToListAsync(ct);
 
         return dias
@@ -114,10 +115,10 @@ public class HorasExtrasService(IDbContextFactory<AppDbContext> dbFactory) : IHo
         var periodoTxt = $"{desde:dd/MM/yyyy} al {hasta.AddDays(-1):dd/MM/yyyy}";
 
         await using var db = await dbFactory.CreateDbContextAsync(ct);
+        // Resumen: todo el personal del período (en 0 si no tuvo horas). Detalle: solo días con horas.
         var dias = (await db.Novedades
                 .Include(n => n.Empleado)
-                .Where(n => n.Fecha >= desde && n.Fecha < hasta
-                         && (n.HorasExtras50 > 0 || n.HorasExtras100 > 0 || n.HorasRefrigerio > 0))
+                .Where(n => n.Fecha >= desde && n.Fecha < hasta)
                 .ToListAsync(ct))
             .Where(n => area is null || n.Empleado.Area == area)
             .OrderBy(n => n.Empleado.Apellido).ThenBy(n => n.Empleado.Nombre).ThenBy(n => n.Fecha)
@@ -167,7 +168,7 @@ public class HorasExtrasService(IDbContextFactory<AppDbContext> dbFactory) : IHo
         for (int c = 0; c < cabDet.Length; c++) det.Cell(1, c + 1).Value = cabDet[c];
         det.Range(1, 1, 1, cabDet.Length).Style.Font.SetBold();
         f = 2;
-        foreach (var x in dias)
+        foreach (var x in dias.Where(x => x.HorasExtras50 > 0 || x.HorasExtras100 > 0 || x.HorasRefrigerio > 0))
         {
             det.Cell(f, 1).Value = x.Empleado.Legajo ?? "—";
             det.Cell(f, 2).Value = x.Empleado.ApellidoNombre;
