@@ -248,6 +248,21 @@ public class HumandServiceTests
     }
 
     [Fact]
+    public void Categorias_ignoradas_detecta_las_desconocidas_con_horas()
+    {
+        using var doc = System.Text.Json.JsonDocument.Parse("""
+            { "categorizedHours": [
+                { "category": { "name": "Horas extras al 50" }, "hours": 2 },
+                { "category": { "name": "Horas nocturnas" }, "hours": 3 },
+                { "category": { "name": "Hs adicionales" }, "hours": 4 },
+                { "category": { "name": "Otra en cero" }, "hours": 0 }
+            ] }
+            """);
+        var ignoradas = HumandService.CategoriasIgnoradas(doc.RootElement).ToList();
+        Assert.Equal([("Hs adicionales", 4.0)], ignoradas);
+    }
+
+    [Fact]
     public async Task Reintenta_con_backoff_ante_429()
     {
         var ok = $$"""{ "count": 1, "users": [ {{UserJson("1")}} ] }""";

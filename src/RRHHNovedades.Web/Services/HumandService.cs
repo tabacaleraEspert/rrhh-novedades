@@ -89,7 +89,14 @@ public class HumandService : IHumandService
                     break;
 
                 foreach (var it in items.EnumerateArray())
+                {
                     result.Add(MapJornada(it, fecha));
+                    // Diagnóstico: categorías de horas que no se leen (caso oct-2026: extras que se
+                    // ven en la app de Humand pero no llegan al reporte). Solo loguea, no cambia datos.
+                    foreach (var (cat, horas) in CategoriasIgnoradas(it))
+                        _logger.LogWarning("Humand: categoría de horas no reconocida \"{Categoria}\" ({Horas} h), empleado {Emp} {Fecha}",
+                            cat, horas, Str(it, "employeeId"), fecha);
+                }
 
                 // OJO: el totalPages/count de Humand viene mal (siempre 1 / por página).
                 // Se pagina mientras la página venga llena.
@@ -254,6 +261,24 @@ public class HumandService : IHumandService
     }
 
     public enum CategoriaHoras { Otra, Refrigerio, Extras50, Extras100 }
+
+    /// <summary>
+    /// Categorías de categorizedHours con horas que no se mapean a extras/refrigerio, salvo las
+    /// "Horas nocturnas" (conocidas e ignoradas a propósito). internal para testear.
+    /// </summary>
+    internal static IEnumerable<(string Categoria, double Horas)> CategoriasIgnoradas(JsonElement it)
+    {
+        if (!it.TryGetProperty("categorizedHours", out var chs) || chs.ValueKind != JsonValueKind.Array) yield break;
+        foreach (var ch in chs.EnumerateArray())
+        {
+            if (!ch.TryGetProperty("category", out var cat) || cat.ValueKind != JsonValueKind.Object) continue;
+            var nombre = Str(cat, "name") ?? "(sin nombre)";
+            var horas = Numero(ch, "hours") ?? 0;
+            if (horas <= 0 || TipoCategoriaHoras(nombre) != CategoriaHoras.Otra) continue;
+            if (nombre.Contains("nocturn", StringComparison.OrdinalIgnoreCase)) continue;
+            yield return (nombre, horas);
+        }
+    }
 
     /// <summary>
     /// Clasifica el nombre de una categoría de categorizedHours. Se matchea por contenido (no por
