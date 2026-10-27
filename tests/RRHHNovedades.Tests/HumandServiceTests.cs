@@ -137,6 +137,35 @@ public class HumandServiceTests
     }
 
     [Fact]
+    public async Task Jornadas_turno_noche_con_marcaje_de_mas_toma_la_salida_del_dia_siguiente()
+    {
+        // Caso real Rodriguez 16-oct-2026: marcó entrada y salida por error a las 21:51, volvió a
+        // entrar y salió 06:02 del 17. Humand muestra 21:51 - 06:02 (8 h 11). Antes se comparaba
+        // solo la hora y ganaba 21:51:45 ⇒ la noche quedaba en 0 en Nocturnidad.
+        var dia = """
+            {
+              "employeeId": "E1", "referenceDate": "2026-10-16",
+              "isWorkday": true, "hasSchedule": true,
+              "timeSlots": [ { "startTime": "22:00" } ],
+              "entries": [
+                { "type": "START", "time": "2026-10-16T21:51:21.000-03:00" },
+                { "type": "END",   "time": "2026-10-16T21:51:45.000-03:00" },
+                { "type": "START", "time": "2026-10-16T21:52:10.000-03:00" },
+                { "type": "END",   "time": "2026-10-17T06:02:00.000-03:00" }
+              ],
+              "incidences": []
+            }
+            """;
+        var svc = Crear(new FakeHandler((HttpStatusCode.OK, $$"""{ "count": 1, "items": [ {{dia}} ] }""")));
+
+        var j = (await svc.ObtenerJornadasAsync(["E1"], new DateOnly(2026, 10, 16))).Single();
+
+        Assert.Equal(new TimeOnly(21, 51, 21), j.HoraEntrada);
+        Assert.Equal(new TimeOnly(6, 2), j.HoraSalida);
+        Assert.Equal(8 * 60 + 8, NocturnidadService.MinutosNocturnos(j.HoraEntrada!.Value, j.HoraSalida)); // 21:51→06:00 en banda
+    }
+
+    [Fact]
     public async Task Jornadas_mapea_permisos_embebidos_e_incidences()
     {
         // Caso real de vacaciones: sin horario, sin ABSENT, permiso embebido en timeOffRequests.

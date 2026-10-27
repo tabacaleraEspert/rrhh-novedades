@@ -208,16 +208,25 @@ public class HumandService : IHumandService
                     if (Str(t, "consumptionType") == "FULL_DAY") permisosDiaCompleto.Add(n);
                 }
 
+        // Primera entrada y última salida comparando el INSTANTE (fecha + hora), no solo la hora:
+        // en el turno noche la salida es del día siguiente. Con solo la hora, un marcaje de más
+        // (caso real Rodriguez 16-oct-2026: START 21:51:21, END 21:51:45, END 06:02 del 17) hacía
+        // ganar 21:51:45 sobre 06:02 y la noche quedaba en 0 en Nocturnidad.
         TimeOnly? entrada = null, salida = null;
+        DateTimeOffset? instEntrada = null, instSalida = null;
         if (it.TryGetProperty("entries", out var entries) && entries.ValueKind == JsonValueKind.Array)
         {
             foreach (var e in entries.EnumerateArray())
             {
                 var tipo = Str(e, "type");
-                var t = ParseTime(Str(e, "time"));
+                var txt = Str(e, "time");
+                var t = ParseTime(txt);
                 if (t is null) continue;
-                if (tipo == "START") entrada = entrada is null || t < entrada ? t : entrada;
-                else if (tipo == "END") salida = salida is null || t > salida ? t : salida;
+                var inst = ParseInstante(txt); // null si es hora "a secas": se compara por hora, como antes
+                if (tipo == "START" && (entrada is null || (inst is not null && instEntrada is not null ? inst < instEntrada : t < entrada)))
+                    (entrada, instEntrada) = (t, inst);
+                else if (tipo == "END" && (salida is null || (inst is not null && instSalida is not null ? inst > instSalida : t > salida)))
+                    (salida, instSalida) = (t, inst);
             }
         }
 
@@ -394,6 +403,11 @@ public class HumandService : IHumandService
             return TimeOnly.FromDateTime(TimeZoneInfo.ConvertTime(dto, TzArgentina).DateTime);
         return null;
     }
+
+    /// <summary>Instante de un timestamp completo (con fecha); null si es una hora "a secas".</summary>
+    private static DateTimeOffset? ParseInstante(string? s) =>
+        !string.IsNullOrWhiteSpace(s) && !TimeOnly.TryParse(s, System.Globalization.CultureInfo.InvariantCulture, out _)
+            && DateTimeOffset.TryParse(s, out var dto) ? dto : null;
 
     private static DateOnly? ParseDate(string? s) =>
         DateOnly.TryParse(s, out var d) ? d : null;
