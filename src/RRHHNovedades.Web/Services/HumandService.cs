@@ -90,7 +90,13 @@ public class HumandService : IHumandService
 
                 foreach (var it in items.EnumerateArray())
                 {
-                    result.Add(MapJornada(it, fecha));
+                    var jornada = MapJornada(it, fecha);
+                    result.Add(jornada);
+                    // Diagnóstico (caso Gomez 19-oct-2026): trabajó 1 h o más sobre lo programado y
+                    // Humand no manda extras. Se loguea el crudo de horas para ver qué categoriza.
+                    if (jornada.HorasExtras50 + jornada.HorasExtras100 == 0 && SobreProgramado(it) >= 1)
+                        _logger.LogWarning("Humand: {Emp} {Fecha} trabajó {Exceso:0.##} h sobre lo programado sin extras. hours={Hours} categorizedHours={Cat} incidences={Inc} entries={Entries}",
+                            Str(it, "employeeId"), fecha, SobreProgramado(it), Crudo(it, "hours"), Crudo(it, "categorizedHours"), Crudo(it, "incidences"), Crudo(it, "entries"));
                     // Diagnóstico: categorías de horas que no se leen (caso oct-2026: extras que se
                     // ven en la app de Humand pero no llegan al reporte). Solo loguea, no cambia datos.
                     foreach (var (cat, horas) in CategoriasIgnoradas(it))
@@ -403,6 +409,14 @@ public class HumandService : IHumandService
             return TimeOnly.FromDateTime(TimeZoneInfo.ConvertTime(dto, TzArgentina).DateTime);
         return null;
     }
+
+    /// <summary>hours.worked − hours.scheduled del day-summary (0 si falta alguno).</summary>
+    internal static double SobreProgramado(JsonElement it) =>
+        it.TryGetProperty("hours", out var h) && h.ValueKind == JsonValueKind.Object
+            ? (Numero(h, "worked") ?? 0) - (Numero(h, "scheduled") ?? 0) : 0;
+
+    private static string Crudo(JsonElement it, string prop) =>
+        it.TryGetProperty(prop, out var v) ? v.GetRawText() : "—";
 
     /// <summary>Instante de un timestamp completo (con fecha); null si es una hora "a secas".</summary>
     private static DateTimeOffset? ParseInstante(string? s) =>

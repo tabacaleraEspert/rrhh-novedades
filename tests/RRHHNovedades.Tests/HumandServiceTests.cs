@@ -276,6 +276,16 @@ public class HumandServiceTests
         Assert.Equal(esperado, HumandService.TipoCategoriaHoras(nombre));
     }
 
+    [Theory]
+    [InlineData("""{ "hours": { "worked": 11.9, "scheduled": 8 } }""", 3.9)]
+    [InlineData("""{ "hours": { "worked": 8 } }""", 8)]
+    [InlineData("""{ }""", 0)]
+    public void Sobre_programado_resta_worked_menos_scheduled(string json, double esperado)
+    {
+        using var doc = System.Text.Json.JsonDocument.Parse(json);
+        Assert.Equal(esperado, HumandService.SobreProgramado(doc.RootElement), 3);
+    }
+
     [Fact]
     public void Categorias_ignoradas_detecta_las_desconocidas_con_horas()
     {
