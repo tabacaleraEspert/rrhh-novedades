@@ -219,12 +219,14 @@ public class HorasExtrasService(IDbContextFactory<AppDbContext> dbFactory) : IHo
     /// <summary>
     /// Horas extra liquidables de UN día (regla RRHH oct-2026): las horas enteras cuentan y la
     /// fracción suma una hora solo si son 48 minutos o más (4,56 h = 4 h 34 min ⇒ 4; 4,85 h ⇒ 5).
-    /// Se trabaja en minutos enteros para evitar errores de coma flotante en el borde (0,8 h).
+    /// El minuto empezado cuenta entero, como lo lee RRHH en la fichada (sin segundos): caso real
+    /// Vazquez sáb 3-oct-2026, 06:12 → 13:00 = 6 h 48 en la fichada, Humand 6,79 h (6 h 47 m 24 s) ⇒ 7.
+    /// El −0,001 evita que el ruido de coma flotante (4,0 × 60 = 240,0000001) sume un minuto.
     /// </summary>
     public static double Redondear(double horas)
     {
         if (horas <= 0) return 0;
-        var minutos = (int)Math.Round(horas * 60, MidpointRounding.AwayFromZero);
+        var minutos = (int)Math.Ceiling(horas * 60 - 0.001);
         return minutos / 60 + (minutos % 60 >= 48 ? 1 : 0);
     }
 }

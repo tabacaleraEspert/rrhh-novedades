@@ -191,7 +191,9 @@ public class HorasExtrasServiceTests
     [InlineData(4.56, 4)]   // 4h34
     [InlineData(3.89, 4)]   // 3h53
     [InlineData(4.8, 5)]    // 4h48 justo en el borde
-    [InlineData(4.79, 4)]   // 4h47
+    [InlineData(4.79, 5)]   // 4h47m24s: el minuto empezado cuenta ⇒ 48
+    [InlineData(4.78, 4)]   // 4h46m48s ⇒ 47
+    [InlineData(6.79, 7)]   // caso real Vazquez sáb 3-oct: fichada 06:12 → 13:00 = 6h48
     [InlineData(0.5, 0)]    // 30 min
     [InlineData(0.8, 1)]    // 48 min
     [InlineData(2.1, 2)]
