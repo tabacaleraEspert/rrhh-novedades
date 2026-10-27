@@ -42,6 +42,12 @@ public class NovedadDiaria
     /// <summary>Horas extra al 100 % del día (categoría "Horas extras al 100" de Humand). 0 si no tuvo.</summary>
     public double HorasExtras100 { get; set; }
 
+    /// <summary>
+    /// Inicio teórico del horario del día (primer timeSlot de Humand). null = sin horario. Se usa
+    /// para devolver a las extras la tardanza que Humand les descuenta (ver HorasExtrasService).
+    /// </summary>
+    public TimeOnly? InicioTeorico { get; set; }
+
     /// <summary>Última vez que se sincronizó/recalculó desde Humand.</summary>
     public DateTime ActualizadoUtc { get; set; }
 }

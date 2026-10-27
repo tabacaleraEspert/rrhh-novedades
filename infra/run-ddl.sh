@@ -77,8 +77,15 @@ az containerapp job create -g "$RG" -n "$JOB" --yaml "$YAML" -o none
 # IdentityDoesNotExist. El PATCH directo funciona.
 echo "==> 1b/4 Asignando Managed Identity id-rrhh-prod al job (ARM PATCH)..."
 JOB_ID="/subscriptions/$SUB/resourceGroups/$RG/providers/Microsoft.App/jobs/$JOB"
-az rest --method patch --url "https://management.azure.com${JOB_ID}?api-version=2024-03-01" \
-  --body "{\"identity\":{\"type\":\"UserAssigned\",\"userAssignedIdentities\":{\"$MI_ID\":{}}}}" -o none
+# Reintentos: justo después del create, ARM a veces todavía no "ve" el job y responde
+# IdentityDoesNotExist (27-oct-2026); a los segundos anda.
+for i in $(seq 1 6); do
+    az rest --method patch --url "https://management.azure.com${JOB_ID}?api-version=2024-03-01" \
+      --body "{\"identity\":{\"type\":\"UserAssigned\",\"userAssignedIdentities\":{\"$MI_ID\":{}}}}" -o none && break
+    [ "$i" = 6 ] && { echo "✖ No se pudo asignar la identidad al job" >&2; exit 1; }
+    echo "   reintentando asignación de identidad ($i/5)..."
+    sleep 10
+done
 sleep 5
 
 # Secreto de Key Vault + env CONNSTR: también por ARM PATCH (merge-patch). `job secret set` de la

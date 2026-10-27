@@ -170,6 +170,7 @@ public class HorasExtrasService(IDbContextFactory<AppDbContext> dbFactory) : IHo
         f = 2;
         foreach (var x in dias.Where(x => x.HorasExtras50 > 0 || x.HorasExtras100 > 0 || x.HorasRefrigerio > 0))
         {
+            var (e50, e100) = Extras(x);
             det.Cell(f, 1).Value = x.Empleado.Legajo ?? "—";
             det.Cell(f, 2).Value = x.Empleado.ApellidoNombre;
             det.Cell(f, 3).Value = x.Empleado.Area ?? "—";
@@ -177,10 +178,10 @@ public class HorasExtrasService(IDbContextFactory<AppDbContext> dbFactory) : IHo
             det.Cell(f, 4).Style.DateFormat.Format = "dd/mm/yyyy";
             det.Cell(f, 5).Value = x.HoraEntrada?.ToString("HH:mm") ?? "—";
             det.Cell(f, 6).Value = x.HoraSalida?.ToString("HH:mm") ?? "—";
-            det.Cell(f, 7).Value = R(x.HorasExtras50);
-            det.Cell(f, 8).Value = R(x.HorasExtras100);
-            det.Cell(f, 9).Value = Redondear(x.HorasExtras50);
-            det.Cell(f, 10).Value = Redondear(x.HorasExtras100);
+            det.Cell(f, 7).Value = R(e50);
+            det.Cell(f, 8).Value = R(e100);
+            det.Cell(f, 9).Value = Redondear(e50);
+            det.Cell(f, 10).Value = Redondear(e100);
             det.Cell(f, 11).Value = R(x.HorasRefrigerio);
             f++;
         }
@@ -199,19 +200,43 @@ public class HorasExtrasService(IDbContextFactory<AppDbContext> dbFactory) : IHo
     private static HorasExtrasEmpleado Fila(Empleado emp, IEnumerable<NovedadDiaria> dias)
     {
         var lista = dias.ToList();
+        var ex = lista.Select(Extras).ToList();
         return new HorasExtrasEmpleado(
             emp.Id, emp.Legajo, emp.ApellidoNombre, emp.Area,
-            DiasConExtras: lista.Count(d => d.HorasExtras50 > 0 || d.HorasExtras100 > 0),
-            Extras50: R(lista.Sum(d => d.HorasExtras50)),
-            Extras100: R(lista.Sum(d => d.HorasExtras100)),
+            DiasConExtras: ex.Count(e => e.E50 > 0 || e.E100 > 0),
+            Extras50: R(ex.Sum(e => e.E50)),
+            Extras100: R(ex.Sum(e => e.E100)),
             Refrigerio: R(lista.Sum(d => d.HorasRefrigerio)),
             DiasConRefrigerio: lista.Count(d => d.HorasRefrigerio > 0),
-            Extras50Liq: lista.Sum(d => Redondear(d.HorasExtras50)),
-            Extras100Liq: lista.Sum(d => Redondear(d.HorasExtras100)));
+            Extras50Liq: ex.Sum(e => Redondear(e.E50)),
+            Extras100Liq: ex.Sum(e => Redondear(e.E100)));
     }
 
-    private static HorasExtrasDia Dia(NovedadDiaria n) =>
-        new(n.Fecha, n.HoraEntrada, n.HoraSalida, R(n.HorasExtras50), R(n.HorasExtras100), R(n.HorasRefrigerio));
+    private static HorasExtrasDia Dia(NovedadDiaria n)
+    {
+        var (e50, e100) = Extras(n);
+        return new(n.Fecha, n.HoraEntrada, n.HoraSalida, R(e50), R(e100), R(n.HorasRefrigerio));
+    }
+
+    /// <summary>
+    /// Extras del día que liquida RRHH: desde el FIN del horario, sin descontar la tardanza.
+    /// Humand calcula trabajadas − programadas, o sea que a quien llega tarde le resta la tardanza
+    /// de las extras (caso real Romero Christian 30-sep-2026: entra 08:14, sale 18:00 ⇒ Humand 1,76;
+    /// RRHH 2). Se devuelve la tardanza al tramo que tenga horas (50 %, o 100 % si solo hay de esas).
+    /// Si Humand dio 0 extras no se suma nada: sin el fin del horario no se sabe si se quedó de más.
+    /// internal para testear.
+    /// </summary>
+    internal static (double E50, double E100) Extras(NovedadDiaria n)
+    {
+        double e50 = n.HorasExtras50, e100 = n.HorasExtras100;
+        if (n.HoraEntrada is not { } entrada || n.InicioTeorico is not { } inicio || entrada <= inicio)
+            return (e50, e100);
+        var tardanza = (entrada - inicio).TotalHours;
+        if (tardanza >= 12) return (e50, e100); // cruce de medianoche raro: no es tardanza
+        if (e50 > 0) e50 += tardanza;
+        else if (e100 > 0) e100 += tardanza;
+        return (e50, e100);
+    }
 
     // Humand entrega las horas con decimales (ej. 3,89). Se muestran a 2 decimales, sin redondeo propio.
     private static double R(double h) => Math.Round(h, 2);

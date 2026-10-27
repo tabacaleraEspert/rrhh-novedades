@@ -184,6 +184,29 @@ public class HorasExtrasServiceTests
         Assert.Contains("Logística", res.Cell(1, 1).GetString());
     }
 
+    // Regla RRHH (27-oct-2026): las extras van desde el fin del horario; Humand les descuenta la
+    // tardanza y acá se la devuelve. Casos reales de Romero Christian.
+    [Theory]
+    [InlineData(8, 14, 0, 1.76, 2)]   // 30-sep: entra 08:14, sale 18:00 ⇒ Humand 1,76; RRHH 2
+    [InlineData(8, 7, 0, 2.73, 3)]    // 5-oct: entra 08:07, sale 18:50 ⇒ Humand 2,73; RRHH 3
+    [InlineData(8, 0, 0, 4.8, 5)]     // puntual: no cambia
+    [InlineData(7, 55, 0, 1.76, 1)]   // llegó antes: no se toca lo de Humand
+    [InlineData(8, 30, 0, 0, 0)]      // tarde y sin extras en Humand: no se inventan extras
+    public void Extras_devuelve_la_tardanza_que_Humand_descuenta(int h, int m, int s, double humand50, double liqEsperado)
+    {
+        var n = new NovedadDiaria { HoraEntrada = new TimeOnly(h, m, s), HoraSalida = T(18), InicioTeorico = T(8), HorasExtras50 = humand50 };
+        var (e50, e100) = HorasExtrasService.Extras(n);
+        Assert.Equal(liqEsperado, HorasExtrasService.Redondear(e50));
+        Assert.Equal(0, e100);
+    }
+
+    [Fact]
+    public void Extras_sin_horario_teorico_quedan_como_Humand()
+    {
+        var n = new NovedadDiaria { HoraEntrada = T(8, 14), HoraSalida = T(18), HorasExtras50 = 1.76 };
+        Assert.Equal(1.76, HorasExtrasService.Extras(n).E50, 3);
+    }
+
     // Regla RRHH (oct-2026): por día, 48 min o más de fracción suman una hora; menos se descarta.
     // Casos reales de Derlis Von Brand (20 y 21-oct) + bordes.
     [Theory]
