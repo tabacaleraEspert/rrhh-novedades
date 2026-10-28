@@ -190,7 +190,7 @@ public class HorasExtrasServiceTests
     [InlineData(8, 14, 0, 1.76, 2)]   // 30-sep: entra 08:14, sale 18:00 ⇒ Humand 1,76; RRHH 2
     [InlineData(8, 7, 0, 2.73, 3)]    // 5-oct: entra 08:07, sale 18:50 ⇒ Humand 2,73; RRHH 3
     [InlineData(8, 0, 0, 4.8, 5)]     // puntual: no cambia
-    [InlineData(7, 55, 0, 1.76, 1)]   // llegó antes: no se toca lo de Humand
+    [InlineData(7, 55, 0, 1.76, 1.5)] // llegó antes: no se toca lo de Humand (1h46 ⇒ 1,5)
     [InlineData(8, 30, 0, 0, 0)]      // tarde y sin extras en Humand: no se inventan extras
     public void Extras_devuelve_la_tardanza_que_Humand_descuenta(int h, int m, int s, double humand50, double liqEsperado)
     {
@@ -207,21 +207,28 @@ public class HorasExtrasServiceTests
         Assert.Equal(1.76, HorasExtrasService.Extras(n).E50, 3);
     }
 
-    // Regla RRHH (oct-2026): por día, 48 min o más de fracción suman una hora; menos se descarta.
-    // Casos reales de Derlis Von Brand (20 y 21-oct) + bordes.
+    // Regla RRHH (28-oct-2026): por día, fracción < 30 min se descarta, 30–47 suma media hora,
+    // 48 o más una hora. Ejemplos del pedido de RRHH + casos reales + bordes.
     [Theory]
     [InlineData(4.3, 4)]    // 4h18
-    [InlineData(4.56, 4)]   // 4h34
+    [InlineData(4.56, 4.5)] // 4h34
+    [InlineData(3.5, 3.5)]  // 3h30 (pedido RRHH)
+    [InlineData(3.8, 4)]    // 3h48 (pedido RRHH)
+    [InlineData(4 + 40 / 60.0, 4.5)] // 4h40 (pedido RRHH)
+    [InlineData(3 + 20 / 60.0, 3)]   // 3h20 (pedido RRHH)
+    [InlineData(3 + 29 / 60.0, 3)]   // 3h29 (pedido RRHH)
+    [InlineData(0.48, 0)]   // 28m48s ⇒ 29 min
+    [InlineData(0.49, 0.5)] // 29m24s: el minuto empezado cuenta ⇒ 30 ⇒ media hora
     [InlineData(3.89, 4)]   // 3h53
     [InlineData(4.8, 5)]    // 4h48 justo en el borde
     [InlineData(4.79, 5)]   // 4h47m24s: el minuto empezado cuenta ⇒ 48
-    [InlineData(4.78, 4)]   // 4h46m48s ⇒ 47
+    [InlineData(4.78, 4.5)] // 4h46m48s ⇒ 47
     [InlineData(6.79, 7)]   // caso real Vazquez sáb 3-oct: fichada 06:12 → 13:00 = 6h48
-    [InlineData(0.5, 0)]    // 30 min
+    [InlineData(0.5, 0.5)]  // 30 min
     [InlineData(0.8, 1)]    // 48 min
     [InlineData(2.1, 2)]
     [InlineData(5, 5)]
     [InlineData(0, 0)]
-    public void Redondeo_de_48_minutos_por_dia(double horas, double esperado) =>
+    public void Redondeo_por_dia_media_hora_desde_30_y_hora_desde_48(double horas, double esperado) =>
         Assert.Equal(esperado, HorasExtrasService.Redondear(horas));
 }

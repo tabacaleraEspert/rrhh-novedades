@@ -21,7 +21,7 @@ public record HorasExtrasEmpleado(
 {
     public double TotalExtras => Math.Round(Extras50 + Extras100, 2);
 
-    /// <summary>Total liquidable: suma de las horas redondeadas día por día (regla de los 48 min).</summary>
+    /// <summary>Total liquidable: suma de las horas redondeadas día por día (30 min ⇒ media hora, 48 min ⇒ hora entera).</summary>
     public double TotalExtrasLiq => Extras50Liq + Extras100Liq;
 }
 
@@ -129,7 +129,7 @@ public class HorasExtrasService(IDbContextFactory<AppDbContext> dbFactory) : IHo
         var res = wb.Worksheets.Add("Resumen");
         res.Cell(1, 1).Value = $"Horas extras y refrigerio — período {periodoTxt}" + (area is null ? "" : $" — {area}");
         res.Range(1, 1, 1, 12).Merge().Style.Font.SetBold();
-        res.Cell(2, 1).Value = "Horas según las políticas de marcaje de Humand (fichadas reales). \"liq.\" = redondeadas por día: 48 min o más suman una hora, menos se descartan. Refrigerio: horas de la categoría \"Refrigerio\".";
+        res.Cell(2, 1).Value = "Horas según las políticas de marcaje de Humand (fichadas reales). \"liq.\" = redondeadas por día: de 30 a 47 min suman media hora, 48 min o más una hora, menos de 30 se descartan. Refrigerio: horas de la categoría \"Refrigerio\".";
         res.Range(2, 1, 2, 12).Merge().Style.Font.SetItalic();
         string[] cabRes = ["Legajo", "Empleado", "Área", "Días c/ extras", "HE 50%", "HE 100%", "Total HE", "HE 50% liq.", "HE 100% liq.", "Total HE liq.", "Refrigerio (hs)", "Días c/ refrigerio"];
         for (int c = 0; c < cabRes.Length; c++) res.Cell(4, c + 1).Value = cabRes[c];
@@ -242,8 +242,9 @@ public class HorasExtrasService(IDbContextFactory<AppDbContext> dbFactory) : IHo
     private static double R(double h) => Math.Round(h, 2);
 
     /// <summary>
-    /// Horas extra liquidables de UN día (regla RRHH oct-2026): las horas enteras cuentan y la
-    /// fracción suma una hora solo si son 48 minutos o más (4,56 h = 4 h 34 min ⇒ 4; 4,85 h ⇒ 5).
+    /// Horas extra liquidables de UN día (regla RRHH 28-oct-2026): las horas enteras cuentan y la
+    /// fracción suma media hora de 30 a 47 minutos y una hora entera desde los 48; menos de 30 se
+    /// descarta (3 h 29 ⇒ 3; 3 h 30 ⇒ 3,5; 4 h 40 ⇒ 4,5; 3 h 48 ⇒ 4).
     /// El minuto empezado cuenta entero, como lo lee RRHH en la fichada (sin segundos): caso real
     /// Vazquez sáb 3-oct-2026, 06:12 → 13:00 = 6 h 48 en la fichada, Humand 6,79 h (6 h 47 m 24 s) ⇒ 7.
     /// El −0,001 evita que el ruido de coma flotante (4,0 × 60 = 240,0000001) sume un minuto.
@@ -252,6 +253,7 @@ public class HorasExtrasService(IDbContextFactory<AppDbContext> dbFactory) : IHo
     {
         if (horas <= 0) return 0;
         var minutos = (int)Math.Ceiling(horas * 60 - 0.001);
-        return minutos / 60 + (minutos % 60 >= 48 ? 1 : 0);
+        var fraccion = minutos % 60;
+        return minutos / 60 + (fraccion >= 48 ? 1 : fraccion >= 30 ? 0.5 : 0);
     }
 }
