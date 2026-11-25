@@ -224,19 +224,35 @@ public class HorasExtrasService(IDbContextFactory<AppDbContext> dbFactory) : IHo
     /// de las extras (caso real Romero Christian 30-sep-2026: entra 08:14, sale 18:00 ⇒ Humand 1,76;
     /// RRHH 2). Se devuelve la tardanza al tramo que tenga horas (50 %, o 100 % si solo hay de esas).
     /// Si Humand dio 0 extras no se suma nada: sin el fin del horario no se sabe si se quedó de más.
+    /// Al revés, llegar ANTES del horario no es extra (regla RRHH 25-nov-2026): Humand la suma
+    /// (caso real Marote 12-nov-2026: horario 06–14, entra 05:44, sale 16:35 ⇒ Humand 2,85 ⇒ 3;
+    /// RRHH 2,5). Se descuenta la anticipada, salvo que sea de 1 h o más: esos pocos casos son
+    /// extras previas reales y quedan como las da Humand.
     /// internal para testear.
     /// </summary>
     internal static (double E50, double E100) Extras(NovedadDiaria n)
     {
         double e50 = n.HorasExtras50, e100 = n.HorasExtras100;
-        if (n.HoraEntrada is not { } entrada || n.InicioTeorico is not { } inicio || entrada <= inicio)
+        if (n.HoraEntrada is not { } entrada || n.InicioTeorico is not { } inicio || entrada == inicio)
             return (e50, e100);
+        if (entrada < inicio)
+        {
+            var anticipada = (inicio - entrada).TotalHours;
+            if (anticipada >= AnticipadaQueCuenta) return (e50, e100);
+            var desc50 = Math.Min(e50, anticipada);
+            e50 -= desc50;
+            e100 = Math.Max(0, e100 - (anticipada - desc50));
+            return (e50, e100);
+        }
         var tardanza = (entrada - inicio).TotalHours;
         if (tardanza >= 12) return (e50, e100); // cruce de medianoche raro: no es tardanza
         if (e50 > 0) e50 += tardanza;
         else if (e100 > 0) e100 += tardanza;
         return (e50, e100);
     }
+
+    /// <summary>Llegada anticipada desde la cual se toma como extra previa (horas).</summary>
+    internal const double AnticipadaQueCuenta = 1;
 
     // Humand entrega las horas con decimales (ej. 3,89). Se muestran a 2 decimales, sin redondeo propio.
     private static double R(double h) => Math.Round(h, 2);

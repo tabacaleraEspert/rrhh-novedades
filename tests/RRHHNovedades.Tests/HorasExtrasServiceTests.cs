@@ -190,7 +190,7 @@ public class HorasExtrasServiceTests
     [InlineData(8, 14, 0, 1.76, 2)]   // 30-sep: entra 08:14, sale 18:00 ⇒ Humand 1,76; RRHH 2
     [InlineData(8, 7, 0, 2.73, 3)]    // 5-oct: entra 08:07, sale 18:50 ⇒ Humand 2,73; RRHH 3
     [InlineData(8, 0, 0, 4.8, 5)]     // puntual: no cambia
-    [InlineData(7, 55, 0, 1.76, 1.5)] // llegó antes: no se toca lo de Humand (1h46 ⇒ 1,5)
+    [InlineData(7, 55, 0, 1.76, 1.5)] // llegó 5 min antes: se descuentan (1h41 ⇒ 1,5)
     [InlineData(8, 30, 0, 0, 0)]      // tarde y sin extras en Humand: no se inventan extras
     public void Extras_devuelve_la_tardanza_que_Humand_descuenta(int h, int m, int s, double humand50, double liqEsperado)
     {
@@ -198,6 +198,24 @@ public class HorasExtrasServiceTests
         var (e50, e100) = HorasExtrasService.Extras(n);
         Assert.Equal(liqEsperado, HorasExtrasService.Redondear(e50));
         Assert.Equal(0, e100);
+    }
+
+    // Regla RRHH (25-nov-2026): llegar antes del horario no es extra, salvo 1 h o más (extra previa).
+    // Caso real Marote 12-nov-2026: horario 06–14, entra 05:44:44, sale 16:35 ⇒ Humand 2,85 (⇒ 3); RRHH 2,5.
+    [Theory]
+    [InlineData(5, 44, 44, 2.85, 0, 2.5, 0)]  // Marote: se descuentan 15m16s
+    [InlineData(5, 0, 0, 3.6, 0, 3.5, 0)]     // 1 h antes: extra previa, queda como Humand
+    [InlineData(4, 30, 0, 4.1, 0, 4, 0)]      // más de 1 h antes: queda como Humand
+    [InlineData(5, 30, 0, 0.3, 0, 0, 0)]      // la anticipada se come todo: no queda negativo
+    [InlineData(5, 30, 0, 0.2, 2, 0, 1.5)]    // sobra anticipada: se descuenta del 100 %
+    [InlineData(5, 50, 0, 0, 0, 0, 0)]        // antes y sin extras: nada
+    public void Extras_descuenta_la_llegada_anticipada(int h, int m, int s, double humand50, double humand100, double liq50, double liq100)
+    {
+        var n = new NovedadDiaria { HoraEntrada = new TimeOnly(h, m, s), HoraSalida = T(16, 35), InicioTeorico = T(6), HorasExtras50 = humand50, HorasExtras100 = humand100 };
+        var (e50, e100) = HorasExtrasService.Extras(n);
+        Assert.Equal(liq50, HorasExtrasService.Redondear(e50));
+        Assert.Equal(liq100, HorasExtrasService.Redondear(e100));
+        Assert.True(e50 >= 0 && e100 >= 0);
     }
 
     [Fact]
